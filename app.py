@@ -21,10 +21,10 @@ conn = st.connection(
 # ==========================================
 def obtener_vehiculos():
     # Eliminamos el parámetro extra para evitar TypeError
-    return conn.query("SELECT placa, conductor, celular FROM vehiculos")
+    return conn.query("SELECT placa, conductor, celular FROM vehiculos", ttl=0)
 
 def obtener_asignaciones(fecha):
-    return conn.query(f"SELECT placa FROM asignaciones WHERE fecha='{fecha}'")
+    return conn.query(f"SELECT placa FROM asignaciones WHERE fecha='{fecha}'", ttl=0)
 
 # ==========================================
 # INTERFAZ DE USUARIO (LOGIN OBLIGATORIO)
@@ -32,7 +32,7 @@ def obtener_asignaciones(fecha):
 st.sidebar.title("🔐 Acceso al Sistema")
 
 # Obtenemos los nombres y creamos una lista con una opción neutra
-usuarios_df = conn.query("SELECT nombre, rol FROM usuarios")
+usuarios_df = conn.query("SELECT nombre, rol FROM usuarios", ttl=0)
 lista_usuarios = ["-- Selecciona tu nombre --"] + usuarios_df['nombre'].tolist()
 
 usuario_actual = st.sidebar.selectbox(
@@ -72,7 +72,7 @@ query_global = f"""
     JOIN vehiculos v ON r.placa = v.placa
     WHERE r.estado = 'Activa' AND r.fecha = '{fecha_str}'
 """
-df_global = conn.query(query_global)
+df_global = conn.query(query_global, ttl=0)
 
 if not df_global.empty:
     st.dataframe(df_global, hide_index=True, use_container_width=True)
@@ -117,7 +117,7 @@ if rol_actual == 'Coordinador':
 
     # Monitoreo de estado
     st.subheader("📊 Estado de Reservas")
-    df_reservas_dia = conn.query(f"SELECT placa, usuario, franja, estado FROM reservas WHERE fecha='{fecha_sel}'")
+    df_reservas_dia = conn.query(f"SELECT placa, usuario, franja, estado FROM reservas WHERE fecha='{fecha_sel}'", ttl=0)
     if not df_reservas_dia.empty:
         st.dataframe(df_reservas_dia, use_container_width=True)
     else:
@@ -140,7 +140,7 @@ if rol_actual == 'Coordinador':
                     if p_nueva and c_nuevo:
                         p_limpia = p_nueva.upper().strip()
                         # Verificamos si la placa ya existe
-                        existe_v = conn.query(f"SELECT placa FROM vehiculos WHERE placa = '{p_limpia}'")
+                        existe_v = conn.query(f"SELECT placa FROM vehiculos WHERE placa = '{p_limpia}'", ttl=0)
                         
                         with conn.session as s:
                             if not existe_v.empty:
@@ -157,7 +157,7 @@ if rol_actual == 'Coordinador':
 
             st.write("---")
             st.write("**Eliminar Vehículos:**")
-            df_v = conn.query("SELECT * FROM vehiculos")
+            df_v = conn.query("SELECT * FROM vehiculos", ttl=0)
             for _, row in df_v.iterrows():
                 col_i, col_b = st.columns([0.8, 0.2])
                 col_i.write(f"🚗 **{row['placa']}** - {row['conductor']}")
@@ -176,7 +176,7 @@ if rol_actual == 'Coordinador':
                     if n_usuario:
                         n_limpio = n_usuario.strip()
                         # Verificamos si el usuario ya existe
-                        existe_u = conn.query(f"SELECT nombre FROM usuarios WHERE nombre = '{n_limpio}'")
+                        existe_u = conn.query(f"SELECT nombre FROM usuarios WHERE nombre = '{n_limpio}'", ttl=0)
                         
                         with conn.session as s:
                             if not existe_u.empty:
@@ -191,7 +191,7 @@ if rol_actual == 'Coordinador':
 
             st.write("---")
             st.write("**Eliminar Usuarios:**")
-            df_u = conn.query("SELECT id, nombre, rol FROM usuarios")
+            df_u = conn.query("SELECT id, nombre, rol FROM usuarios", ttl=0)
             for _, row in df_u.iterrows():
                 if row['nombre'] != usuario_actual:
                     col_u, col_b = st.columns([0.8, 0.2])
@@ -225,7 +225,7 @@ elif rol_actual == 'Trabajador':
                 AND (franja = '{franja_res}' OR franja = 'Todo el día' OR '{franja_res}' = 'Todo el día')
             )
         """
-        df_disp = conn.query(query_disponibles)
+        df_disp = conn.query(query_disponibles, ttl=0)
         
         if df_disp.empty:
             st.warning("No hay vehículos disponibles para esta selección.")
@@ -246,7 +246,7 @@ elif rol_actual == 'Trabajador':
                             s.commit()
                         
                         # Datos para WhatsApp
-                        datos_cond = conn.query(f"SELECT conductor, celular FROM vehiculos WHERE placa='{placa_elegida}'")
+                        datos_cond = conn.query(f"SELECT conductor, celular FROM vehiculos WHERE placa='{placa_elegida}'", ttl=0)
                         if not datos_cond.empty:
                             n_cond = datos_cond.iloc[0]['conductor']
                             c_cond = "".join(filter(str.isdigit, str(datos_cond.iloc[0]['celular'])))
@@ -260,7 +260,7 @@ elif rol_actual == 'Trabajador':
 
     with tab_mis_reservas:
         query_mis = f"SELECT id, fecha, placa, franja FROM reservas WHERE usuario='{usuario_actual}' AND estado='Activa'"
-        df_mis = conn.query(query_mis)
+        df_mis = conn.query(query_mis, ttl=0)
         
         if df_mis.empty:
             st.info("No tienes reservas activas.")
