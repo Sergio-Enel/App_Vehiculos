@@ -103,12 +103,12 @@ if rol_actual == 'Coordinador':
         if guardar:
             with conn.session as s:
     # Eliminamos lo anterior para esa fecha
-    s.execute("DELETE FROM asignaciones WHERE fecha = :f", {"f": str(fecha_sel)})
+                s.execute("DELETE FROM asignaciones WHERE fecha = :f", {"f": str(fecha_sel)})
     # Insertamos los nuevos vehículos habilitados
-    for placa in seleccionados:
-        s.execute("INSERT INTO asignaciones (fecha, placa) VALUES (:f, :p)", 
-                  {"f": str(fecha_sel), "p": placa})
-    s.commit()
+                for placa in seleccionados:
+                    s.execute("INSERT INTO asignaciones (fecha, placa) VALUES (:f, :p)", 
+                               {"f": str(fecha_sel), "p": placa})
+                s.commit()
             st.success(f"Se habilitaron {len(seleccionados)} vehículos para el {fecha_sel}.")
             st.rerun()
 
@@ -246,18 +246,18 @@ elif rol_actual == 'Trabajador':
                     else:
                         
                         with conn.session as s:
-    s.execute("""
-        INSERT INTO reservas (fecha, placa, usuario, franja, estado, destino) 
-        VALUES (:f, :p, :u, :fr, :e, :d)
-    """, {
-        "f": str(fecha_res), 
-        "p": placa_elegida, 
-        "u": usuario_actual, 
-        "fr": franja_res, 
-        "e": 'Activa', 
-        "d": destino_res
-    })
-    s.commit()
+                            s.execute("""
+                                      INSERT INTO reservas (fecha, placa, usuario, franja, estado, destino) 
+                                      VALUES (:f, :p, :u, :fr, :e, :d)
+                                       """, {
+                                       "f": str(fecha_res), 
+                                       "p": placa_elegida, 
+                                       "u": usuario_actual, 
+                                       "fr": franja_res, 
+                                       "e": 'Activa', 
+                                       "d": destino_res
+                                       })
+                            s.commit()
                         
                         # 2. Obtener los datos del conductor
                         datos_cond = conn.query(f"SELECT conductor, celular FROM vehiculos WHERE placa = '{placa_elegida}'", conn)
@@ -313,8 +313,8 @@ elif rol_actual == 'Trabajador':
                     # Botón para liberar el vehículo
                     if st.button(f"🗑️ Liberar Vehículo {row['placa']}", key=f"lib_{row['id']}"):
                         with conn.session as s:
-    s.execute("UPDATE reservas SET estado = 'Liberada' WHERE id = :id", {"id": row['id']})
-    s.commit()
+                            s.execute("UPDATE reservas SET estado = 'Liberada' WHERE id = :id", {"id": row['id']})
+                            s.commit()
                         
                         # 2. Buscamos los datos del conductor para avisarle
                         datos_cond = pd.read_sql(f"SELECT conductor, celular FROM vehiculos WHERE placa = '{row['placa']}'", conn)
