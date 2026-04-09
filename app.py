@@ -12,7 +12,12 @@ st.set_page_config(page_title="Gestión de Vehículos", layout="wide")
 # Busca la línea de conn y reemplázala por esta:
 # Reemplaza tu configuración de conexión actual por esta:
 # Con esto, Streamlit busca automáticamente la URL en los Secrets
-conn = st.connection("supabase", type="sql")
+# Conexión directa con credenciales inyectadas (Sin depender de Secrets)
+conn = st.connection(
+    "supabase", 
+    type="sql", 
+    url="postgresql://postgres.prqgmsnglfvqyizfvaqm:Energia2026Master@aws-1-sa-east-1.pooler.supabase.com:5432/postgres"
+)
 
 # ==========================================
 # FUNCIONES AUXILIARES
