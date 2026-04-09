@@ -13,7 +13,7 @@ st.set_page_config(page_title="Gestión de Vehículos", layout="wide")
 conn = st.connection(
     "supabase",
     type="sql",
-    url="postgresql://postgres.prqgmsnglfvqyizfvaqm:Energia2026%2A@aws-1-sa-east-1.pooler.supabase.com:6543/postgres"
+    url="postgresql://postgres.prqgmsnglfvqyizfvaqm:Energia2026*@aws-1-sa-east-1.pooler.supabase.com:6543/postgres"
 )
 
 # ==========================================
