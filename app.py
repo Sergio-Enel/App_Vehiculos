@@ -247,7 +247,7 @@ elif rol_actual == 'Trabajador':
                                 c_cond = "".join(filter(str.isdigit, str(datos_cond.iloc[0]['celular'])))
                                 if len(c_cond) == 10: c_cond = "57" + c_cond
                                 
-                                msj_wa = f"Hola {n_cond}, soy {usuario_actual}. Reservé el vehículo {placa_elegida} para el {fecha_res} ({franja_res}). Destino: {destino_res}."
+                                msj_wa = f"Hola {n_cond}, soy {usuario_actual}. Reservé el vehículo {placa_elegida} para el {fecha_res}, Franja Horaria: {franja_res}. Destino: {destino_res}."
                                 wa_url = f"https://wa.me/{c_cond}?text={urllib.parse.quote(msj_wa)}"
                                 
                                 # BOTÓN GRANDE Y VERDE
