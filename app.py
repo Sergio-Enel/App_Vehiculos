@@ -138,13 +138,19 @@ if rol_actual == 'Coordinador':
                 
                 if st.form_submit_button("Guardar / Actualizar"):
                     if p_nueva and c_nuevo:
+                        p_limpia = p_nueva.upper().strip()
+                        # Verificamos si la placa ya existe
+                        existe_v = conn.query(f"SELECT placa FROM vehiculos WHERE placa = '{p_limpia}'")
+                        
                         with conn.session as s:
-                            s.execute(text("""
-                                INSERT INTO vehiculos (placa, conductor, celular) VALUES (:p, :c, :t)
-                                ON CONFLICT (placa) DO UPDATE SET conductor=EXCLUDED.conductor, celular=EXCLUDED.celular
-                            """), {"p": p_nueva.upper(), "c": c_nuevo, "t": t_nuevo})
+                            if not existe_v.empty:
+                                s.execute(text("UPDATE vehiculos SET conductor=:c, celular=:t WHERE placa=:p"), 
+                                          {"p": p_limpia, "c": c_nuevo, "t": t_nuevo})
+                            else:
+                                s.execute(text("INSERT INTO vehiculos (placa, conductor, celular) VALUES (:p, :c, :t)"), 
+                                          {"p": p_limpia, "c": c_nuevo, "t": t_nuevo})
                             s.commit()
-                        st.success(f"Vehículo {p_nueva.upper()} procesado.")
+                        st.success(f"Vehículo {p_limpia} procesado correctamente.")
                         st.rerun()
                     else:
                         st.error("La placa y el conductor son obligatorios.")
@@ -166,16 +172,21 @@ if rol_actual == 'Coordinador':
             with st.form("form_nuevo_usuario"):
                 n_usuario = st.text_input("Nombre completo")
                 r_usuario = st.selectbox("Rol", ["Trabajador", "Coordinador"])
-                if st.form_submit_button("Registrar"):
+                if st.form_submit_button("Registrar / Modificar"):
                     if n_usuario:
+                        n_limpio = n_usuario.strip()
+                        # Verificamos si el usuario ya existe
+                        existe_u = conn.query(f"SELECT nombre FROM usuarios WHERE nombre = '{n_limpio}'")
+                        
                         with conn.session as s:
-                            s.execute(text("""
-                            INSERT INTO usuarios (nombre, rol)
-                            VALUES (:n, :r)
-                            ON CONFLICT (nombre) DO UPDATE SET rol = EXCLUDED.rol
-                            """), {"n": n_usuario, "r": r_usuario})
+                            if not existe_u.empty:
+                                s.execute(text("UPDATE usuarios SET rol = :r WHERE nombre = :n"), 
+                                          {"n": n_limpio, "r": r_usuario})
+                            else:
+                                s.execute(text("INSERT INTO usuarios (nombre, rol) VALUES (:n, :r)"), 
+                                          {"n": n_limpio, "r": r_usuario})
                             s.commit()
-                        st.success(f"Usuario {n_usuario} creado.")
+                        st.success(f"Usuario {n_limpio} procesado correctamente.")
                         st.rerun()
 
             st.write("---")
