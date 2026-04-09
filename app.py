@@ -169,7 +169,11 @@ if rol_actual == 'Coordinador':
                 if st.form_submit_button("Registrar"):
                     if n_usuario:
                         with conn.session as s:
-                            s.execute(text("INSERT INTO usuarios (nombre, rol) VALUES (:n, :r)"), {"n": n_usuario, "r": r_usuario})
+                            s.execute(text("""
+                            INSERT INTO usuarios (nombre, rol)
+                            VALUES (:n, :r)
+                            ON CONFLICT (nombre) DO UPDATE SET rol = EXCLUDED.rol
+                            """), {"n": n_usuario, "r": r_usuario})
                             s.commit()
                         st.success(f"Usuario {n_usuario} creado.")
                         st.rerun()
