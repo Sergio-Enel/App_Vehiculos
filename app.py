@@ -1,72 +1,24 @@
 import streamlit as st
-import sqlite3
+import streamlit as st
 import pandas as pd
 from datetime import date
 
 # ==========================================
 # CONFIGURACIÓN DE PÁGINA Y BASE DE DATOS
 # ==========================================
+conn = st.connection("supabase", type="sql")
 st.set_page_config(page_title="Gestión de Vehículos", layout="wide")
 
-def init_db():
-    conn = sqlite3.connect('flota.db')
-    c = conn.cursor()
-    # Modelo de datos según el plan
-    c.execute('''CREATE TABLE IF NOT EXISTS usuarios 
-                 (id INTEGER PRIMARY KEY, nombre TEXT, rol TEXT, celular TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS vehiculos 
-                 (placa TEXT PRIMARY KEY, conductor TEXT, celular TEXT, correo TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS asignaciones 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, placa TEXT,
-                 UNIQUE(fecha, placa))''')
-    # 1. Aseguramos que la tabla reservas se cree con la columna destino si la base es nueva
-    c.execute('''CREATE TABLE IF NOT EXISTS reservas 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, placa TEXT, 
-                 usuario TEXT, franja TEXT, estado TEXT, destino TEXT)''')
-    
-    # 2. SECCIÓN CRÍTICA: Actualizar base de datos existente
-    # Este bloque intenta agregar la columna 'destino' a tu archivo flota.db actual.
-    # Si ya la habías agregado antes, el "except" evitará que la app de error.
-    try:
-        c.execute("ALTER TABLE reservas ADD COLUMN destino TEXT")
-        conn.commit()
-        print("Base de datos actualizada: Columna 'destino' añadida.")
-    except sqlite3.OperationalError:
-        # Si entramos aquí, significa que la columna ya existía. No hacemos nada.
-        pass
-    
-    
-    # Insertar datos de prueba si la base está vacía
-    c.execute("SELECT COUNT(*) FROM usuarios")
-    if c.fetchone()[0] == 0:
-        c.execute("INSERT INTO usuarios (nombre, rol) VALUES ('Admin Coord', 'Coordinador')")
-        c.execute("INSERT INTO usuarios (nombre, rol) VALUES ('Juan Pérez', 'Trabajador')")
-        c.execute("INSERT INTO usuarios (nombre, rol) VALUES ('María Gómez', 'Trabajador')")
-        
-        vehiculos_demo = [
-            ('ABC-123', 'Carlos Ruiz', '300123', 'carlos@mail.com'),
-            ('DEF-456', 'Luis Torres', '300456', 'luis@mail.com'),
-            ('GHI-789', 'Ana Rojas', '300789', 'ana@mail.com'),
-            ('JKL-012', 'Pedro Paz', '300012', 'pedro@mail.com'),
-            ('MNO-345', 'Sara Vega', '300345', 'sara@mail.com'),
-            ('PQR-678', 'David Gil', '300678', 'david@mail.com'),
-            ('STU-901', 'Rosa Rey', '300901', 'rosa@mail.com'),
-            ('VWX-234', 'Jorge F', '300234', 'jorge@mail.com') # Vehículo extra
-        ]
-        c.executemany("INSERT INTO vehiculos VALUES (?,?,?,?)", vehiculos_demo)
-    conn.commit()
-    return conn
 
-conn = init_db()
 
 # ==========================================
 # FUNCIONES AUXILIARES
 # ==========================================
 def obtener_vehiculos():
-    return pd.read_sql("SELECT placa, conductor FROM vehiculos", conn)
+    return conn.query("SELECT placa, conductor FROM vehiculos", conn)
 
 def obtener_asignaciones(fecha):
-    return pd.read_sql(f"SELECT placa FROM asignaciones WHERE fecha='{fecha}'", conn)
+    return conn.query(f"SELECT placa FROM asignaciones WHERE fecha='{fecha}'", conn)
 
 # ==========================================
 # INTERFAZ DE USUARIO (LOGIN OBLIGATORIO)
@@ -74,7 +26,7 @@ def obtener_asignaciones(fecha):
 st.sidebar.title("🔐 Acceso al Sistema")
 
 # Obtenemos los nombres y creamos una lista con una opción neutra al principio
-usuarios_df = pd.read_sql("SELECT nombre, rol FROM usuarios", conn)
+usuarios_df = conn.query("SELECT nombre, rol FROM usuarios", conn)
 lista_usuarios = ["-- Selecciona tu nombre --"] + usuarios_df['nombre'].tolist()
 
 usuario_actual = st.sidebar.selectbox(
@@ -149,18 +101,20 @@ if rol_actual == 'Coordinador':
         guardar = st.form_submit_button("Guardar Asignación Diaria")
         
         if guardar:
-            c = conn.cursor()
-            # Limpiar asignaciones previas de esa fecha y reescribir (Edición en tiempo real)
-            c.execute("DELETE FROM asignaciones WHERE fecha=?", (str(fecha_sel),))
-            for placa in seleccionados:
-                c.execute("INSERT INTO asignaciones (fecha, placa) VALUES (?,?)", (str(fecha_sel), placa))
-            conn.commit()
+            with conn.session as s:
+    # Eliminamos lo anterior para esa fecha
+    s.execute("DELETE FROM asignaciones WHERE fecha = :f", {"f": str(fecha_sel)})
+    # Insertamos los nuevos vehículos habilitados
+    for placa in seleccionados:
+        s.execute("INSERT INTO asignaciones (fecha, placa) VALUES (:f, :p)", 
+                  {"f": str(fecha_sel), "p": placa})
+    s.commit()
             st.success(f"Se habilitaron {len(seleccionados)} vehículos para el {fecha_sel}.")
             st.rerun()
 
     # Monitoreo de estado
     st.subheader("📊 Estado de Reservas")
-    df_reservas_dia = pd.read_sql(f"SELECT placa, usuario, franja, estado FROM reservas WHERE fecha='{fecha_sel}'", conn)
+    df_reservas_dia = conn.query(f"SELECT placa, usuario, franja, estado FROM reservas WHERE fecha='{fecha_sel}'", conn)
     if not df_reservas_dia.empty:
         st.dataframe(df_reservas_dia, use_container_width=True)
     else:
@@ -195,7 +149,7 @@ if rol_actual == 'Coordinador':
 
             st.write("---")
             st.write("**Eliminar Vehículos:**")
-            df_v = pd.read_sql("SELECT * FROM vehiculos", conn)
+            df_v = conn.query("SELECT * FROM vehiculos", conn)
             for _, row in df_v.iterrows():
                 col_info, col_btn = st.columns([0.8, 0.2])
                 col_info.write(f"🚗 **{row['placa']}** - {row['conductor']}")
@@ -227,7 +181,7 @@ if rol_actual == 'Coordinador':
 
             st.write("---")
             st.write("**Eliminar Usuarios:**")
-            df_u = pd.read_sql("SELECT id, nombre, rol FROM usuarios", conn)
+            df_u = conn.query("SELECT id, nombre, rol FROM usuarios", conn)
             for _, row in df_u.iterrows():
                 if row['nombre'] != usuario_actual: # Evita borrarte a ti mismo
                     col_u, col_b = st.columns([0.8, 0.2])
@@ -270,7 +224,7 @@ elif rol_actual == 'Trabajador':
                 AND (franja = '{franja_res}' OR franja = 'Todo el día' OR '{franja_res}' = 'Todo el día')
             )
         """
-        df_disp = pd.read_sql(query_disponibles, conn)
+        df_disp = conn.query(query_disponibles, conn)
         
         if df_disp.empty:
             st.warning("No hay vehículos disponibles para la fecha y franja seleccionadas.")
@@ -290,14 +244,23 @@ elif rol_actual == 'Trabajador':
                     if not destino_res:
                         st.error("⚠️ Por favor, ingresa el destino antes de reservar.")
                     else:
-                        c = conn.cursor()
-                        # 1. Guardar la reserva incluyendo el destino
-                        c.execute("INSERT INTO reservas (fecha, placa, usuario, franja, estado, destino) VALUES (?,?,?,?,?,?)",
-                                  (str(fecha_res), placa_elegida, usuario_actual, franja_res, 'Activa', destino_res))
-                        conn.commit()
+                        
+                        with conn.session as s:
+    s.execute("""
+        INSERT INTO reservas (fecha, placa, usuario, franja, estado, destino) 
+        VALUES (:f, :p, :u, :fr, :e, :d)
+    """, {
+        "f": str(fecha_res), 
+        "p": placa_elegida, 
+        "u": usuario_actual, 
+        "fr": franja_res, 
+        "e": 'Activa', 
+        "d": destino_res
+    })
+    s.commit()
                         
                         # 2. Obtener los datos del conductor
-                        datos_cond = pd.read_sql(f"SELECT conductor, celular FROM vehiculos WHERE placa = '{placa_elegida}'", conn)
+                        datos_cond = conn.query(f"SELECT conductor, celular FROM vehiculos WHERE placa = '{placa_elegida}'", conn)
                         
                         if not datos_cond.empty:
                             nombre_cond = datos_cond.iloc[0]['conductor']
@@ -349,10 +312,9 @@ elif rol_actual == 'Trabajador':
                     st.markdown(f"**Vehículo:** {row['placa']} | **Día:** {row['fecha']} | **Turno:** {row['franja']}")
                     # Botón para liberar el vehículo
                     if st.button(f"🗑️ Liberar Vehículo {row['placa']}", key=f"lib_{row['id']}"):
-                        c = conn.cursor()
-                        # 1. Cambiamos el estado en la base de datos
-                        c.execute(f"UPDATE reservas SET estado='Liberada' WHERE id={row['id']}")
-                        conn.commit()
+                        with conn.session as s:
+    s.execute("UPDATE reservas SET estado = 'Liberada' WHERE id = :id", {"id": row['id']})
+    s.commit()
                         
                         # 2. Buscamos los datos del conductor para avisarle
                         datos_cond = pd.read_sql(f"SELECT conductor, celular FROM vehiculos WHERE placa = '{row['placa']}'", conn)
