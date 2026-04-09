@@ -295,7 +295,7 @@ elif rol_actual == 'Trabajador':
                             c_c = "".join(filter(str.isdigit, str(d_cond.iloc[0]['celular'])))
                             if len(c_c) == 10: c_c = "57" + c_c
                             
-                            msj_lib = f"Hola {n_c}, ya liberé el vehículo {row['placa']}. Está disponible nuevamente."
+                            msj_lib = f"Hola {n_c}, soy {usuario_actual}. Ya liberé el vehículo {row['placa']}. Está disponible nuevamente."
                             url_lib = f"https://wa.me/{c_c}?text={urllib.parse.quote(msj_lib)}"
                             
                             st.markdown(f"""
