@@ -9,7 +9,12 @@ import urllib.parse
 st.set_page_config(page_title="Gestión de Vehículos", layout="wide")
 
 # Conexión oficial a Supabase (SQL)
-conn = st.connection("supabase", type="sql")
+# Busca la línea de conn y reemplázala por esta:
+conn = st.connection(
+    "supabase",
+    type="sql",
+    url="postgresql://postgres.prqgmsnglfvqyizfvaqm:Energia2026%2A@aws-1-sa-east-1.pooler.supabase.com:6543/postgres"
+)
 
 # ==========================================
 # FUNCIONES AUXILIARES
