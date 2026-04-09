@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from sqlalchemy import text
 from datetime import date
 import urllib.parse
 
@@ -8,10 +9,6 @@ import urllib.parse
 # ==========================================
 st.set_page_config(page_title="Gestión de Vehículos", layout="wide")
 
-# Conexión oficial a Supabase (SQL)
-# Busca la línea de conn y reemplázala por esta:
-# Reemplaza tu configuración de conexión actual por esta:
-# Con esto, Streamlit busca automáticamente la URL en los Secrets
 # Conexión directa con credenciales inyectadas (Sin depender de Secrets)
 conn = st.connection(
     "supabase", 
@@ -110,9 +107,9 @@ if rol_actual == 'Coordinador':
         
         if guardar:
             with conn.session as s:
-                s.execute("DELETE FROM asignaciones WHERE fecha = :f", {"f": str(fecha_sel)})
+                s.execute(text("DELETE FROM asignaciones WHERE fecha = :f"), {"f": str(fecha_sel)})
                 for placa in seleccionados:
-                    s.execute("INSERT INTO asignaciones (fecha, placa) VALUES (:f, :p)", 
+                    s.execute(text("INSERT INTO asignaciones (fecha, placa) VALUES (:f, :p)"), 
                                {"f": str(fecha_sel), "p": placa})
                 s.commit()
             st.success(f"Se habilitaron {len(seleccionados)} vehículos para el {fecha_sel}.")
@@ -142,10 +139,10 @@ if rol_actual == 'Coordinador':
                 if st.form_submit_button("Guardar / Actualizar"):
                     if p_nueva and c_nuevo:
                         with conn.session as s:
-                            s.execute("""
+                            s.execute(text("""
                                 INSERT INTO vehiculos (placa, conductor, celular) VALUES (:p, :c, :t)
                                 ON CONFLICT (placa) DO UPDATE SET conductor=EXCLUDED.conductor, celular=EXCLUDED.celular
-                            """, {"p": p_nueva.upper(), "c": c_nuevo, "t": t_nuevo})
+                            """), {"p": p_nueva.upper(), "c": c_nuevo, "t": t_nuevo})
                             s.commit()
                         st.success(f"Vehículo {p_nueva.upper()} procesado.")
                         st.rerun()
@@ -160,7 +157,7 @@ if rol_actual == 'Coordinador':
                 col_i.write(f"🚗 **{row['placa']}** - {row['conductor']}")
                 if col_b.button("🗑️ Borrar", key=f"del_v_{row['placa']}"):
                     with conn.session as s:
-                        s.execute("DELETE FROM vehiculos WHERE placa=:p", {"p": row['placa']})
+                        s.execute(text("DELETE FROM vehiculos WHERE placa=:p"), {"p": row['placa']})
                         s.commit()
                     st.rerun()
 
@@ -172,7 +169,7 @@ if rol_actual == 'Coordinador':
                 if st.form_submit_button("Registrar"):
                     if n_usuario:
                         with conn.session as s:
-                            s.execute("INSERT INTO usuarios (nombre, rol) VALUES (:n, :r)", {"n": n_usuario, "r": r_usuario})
+                            s.execute(text("INSERT INTO usuarios (nombre, rol) VALUES (:n, :r)"), {"n": n_usuario, "r": r_usuario})
                             s.commit()
                         st.success(f"Usuario {n_usuario} creado.")
                         st.rerun()
@@ -186,7 +183,7 @@ if rol_actual == 'Coordinador':
                     col_u.write(f"👤 {row['nombre']} ({row['rol']})")
                     if col_b.button("🗑️ Quitar", key=f"del_u_{row['id']}"):
                         with conn.session as s:
-                            s.execute("DELETE FROM usuarios WHERE id=:id", {"id": row['id']})
+                            s.execute(text("DELETE FROM usuarios WHERE id=:id"), {"id": row['id']})
                             s.commit()
                         st.rerun()
 
@@ -227,10 +224,10 @@ elif rol_actual == 'Trabajador':
                         st.error("⚠️ Ingresa el destino.")
                     else:
                         with conn.session as s:
-                            s.execute("""
+                            s.execute(text("""
                                 INSERT INTO reservas (fecha, placa, usuario, franja, estado, destino) 
                                 VALUES (:f, :p, :u, :fr, :e, :d)
-                            """, {"f": str(fecha_res), "p": placa_elegida, "u": usuario_actual, "fr": franja_res, "e": 'Activa', "d": destino_res})
+                            """), {"f": str(fecha_res), "p": placa_elegida, "u": usuario_actual, "fr": franja_res, "e": 'Activa', "d": destino_res})
                             s.commit()
                         
                         # Datos para WhatsApp
@@ -257,6 +254,6 @@ elif rol_actual == 'Trabajador':
                 st.write(f"🚗 **{row['placa']}** | {row['fecha']} | {row['franja']}")
                 if st.button(f"🗑️ Liberar {row['placa']}", key=f"lib_{row['id']}"):
                     with conn.session as s:
-                        s.execute("UPDATE reservas SET estado = 'Liberada' WHERE id = :id", {"id": row['id']})
+                        s.execute(text("UPDATE reservas SET estado = 'Liberada' WHERE id = :id"), {"id": row['id']})
                         s.commit()
                     st.rerun()
