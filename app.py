@@ -46,8 +46,26 @@ if usuario_actual == "-- Selecciona tu nombre --":
     st.stop() 
 else:
     rol_actual = usuarios_df[usuarios_df['nombre'] == usuario_actual]['rol'].values[0]
-    st.sidebar.success(f"Sesión iniciada: **{usuario_actual}**")
-    st.sidebar.info(f"Rol activo: **{rol_actual}**")
+    
+    # --- DETALLE PARA TU COMPAÑERA ---
+    # Reemplaza 'Nombre de tu compañera' exactamente como aparece en la DB
+    if usuario_actual == "Angelica Vela": 
+        st.markdown(f"""
+            <div style="
+                background-color: #FFC0CB; 
+                padding: 20px; 
+                border-radius: 15px; 
+                border: 2px solid #FF69B4;
+                text-align: center;
+                margin-bottom: 20px;">
+                <h1 style="color: #D23669; margin: 0;">🌸 ¡Bienvenida, {usuario_actual}! 🌸</h1>
+                <p style="color: #D23669; font-weight: bold;">Sesión activa en modo especial</p>
+            </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.sidebar.success(f"Sesión iniciada: **{usuario_actual}**")
+    # ---------------------------------
+        st.sidebar.info(f"Rol activo: **{rol_actual}**")
 
 # ==========================================
 # VISTA GLOBAL: VEHÍCULOS EN RUTA SEGÚN FECHA
