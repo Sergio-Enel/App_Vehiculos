@@ -295,10 +295,8 @@ elif rol_actual == 'Trabajador':
                             c_c = "".join(filter(str.isdigit, str(d_cond.iloc[0]['celular'])))
                             if len(c_c) == 10: c_c = "57" + c_c
                             
-                            mensaje_lib = (f"Hola {nombre_cond}, te informo que el trabajador {usuario_actual} "
-                                           f"ha LIBERADO la reserva del vehículo {row['placa']} "
-                                           f"que tenía para el turno de la {row['franja']}. "
-                                           f"El vehículo ya está disponible.")
+                       
+                            msj_lib = f"Hola {n_c}, te informo que el trabajador {usuario_actual} ha liberado el vehículo {row['placa']}. Está disponible nuevamente."
                             url_lib = f"https://wa.me/{c_c}?text={urllib.parse.quote(msj_lib)}"
                             
                             st.markdown(f"""
