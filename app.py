@@ -295,12 +295,15 @@ elif rol_actual == 'Trabajador':
                             c_c = "".join(filter(str.isdigit, str(d_cond.iloc[0]['celular'])))
                             if len(c_c) == 10: c_c = "57" + c_c
                             
-                            msj_lib = f"Hola {n_c}, soy {usuario_actual}. Ya liberé el vehículo {row['placa']}. Está disponible nuevamente."
+                            mensaje_lib = (f"Hola {nombre_cond}, te informo que el trabajador {usuario_actual} "
+                                           f"ha LIBERADO la reserva del vehículo {row['placa']} "
+                                           f"que tenía para el turno de la {row['franja']}. "
+                                           f"El vehículo ya está disponible.")
                             url_lib = f"https://wa.me/{c_c}?text={urllib.parse.quote(msj_lib)}"
                             
                             st.markdown(f"""
                                 <a href="{url_lib}" target="_blank" style="text-decoration: none;">
-                                    <div style="background-color: #128C7E; color: white; padding: 12px; text-align: center; border-radius: 8px; font-weight: bold; font-size: 18px;">
+                                    <div style="background-color: #FF4B4B; color: white; padding: 12px; text-align: center; border-radius: 8px; font-weight: bold; font-size: 18px;">
                                         📲 Avisar liberación a {n_c}
                                     </div>
                                 </a>
