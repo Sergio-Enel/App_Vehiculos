@@ -71,8 +71,8 @@ else:
                 text-align: center; 
                 margin-bottom: 20px;">
                 <div style="background-color: rgba(255, 255, 255, 0.8); padding: 10px; border-radius: 10px; display: inline-block;">
-                    <h1 style="color: #333; margin: 0;">🏳️‍🌈 ¡Bienvenido, {usuario_actual}! 🏳️‍🌈</h1>
-                    <p style="color: #555; font-weight: bold; margin: 0;">Sesión activa con orgullo</p>
+                    <h1 style="color: #333; margin: 0;">🏳️‍🌈 ¡Bienvenida, {usuario_actual}! 🏳️‍🌈</h1>
+                    <p style="color: #555; font-weight: bold; margin: 0;">Sesión activa o pasiva con orgullo</p>
                 </div>
             </div>
         """, unsafe_allow_html=True)
