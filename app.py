@@ -180,7 +180,70 @@ if rol_actual == 'Coordinador':
                         st.error(f"Error al liberar: {e}")
             else:
                 st.markdown(f"<span style='color:gray'>🚗 <i>{row['placa']}</i> | 👤 <i>{row['usuario']}</i> | ✅ <b>Liberada</b></span>", unsafe_allow_html=True)
+    st.markdown("---")
+    st.subheader("👑 Reserva Manual (Solo Coordinador)")
+    
+    col_r1, col_r2, col_r3 = st.columns(3)
+    with col_r1: fecha_admin = st.date_input("Fecha:", min_value=date.today(), key="fecha_admin")
+    with col_r2: franja_admin = st.selectbox("Franja:", ["Mañana", "Tarde", "Todo el día"], key="franja_admin")
+    with col_r3: 
+        df_nombres = conn.query("SELECT nombre FROM usuarios", ttl=0)
+        usuario_destino = st.selectbox("¿Para quién es la reserva?", df_nombres['nombre'])
 
+    query_disp_admin = f"""
+        SELECT v.placa, v.conductor, v.celular FROM asignaciones a
+        JOIN vehiculos v ON a.placa = v.placa
+        WHERE a.fecha = '{fecha_admin}' AND a.placa NOT IN (
+            SELECT placa FROM reservas WHERE fecha = '{fecha_admin}' AND estado = 'Activa'
+            AND (franja = '{franja_admin}' OR franja = 'Todo el día' OR '{franja_admin}' = 'Todo el día')
+        )
+    """
+    df_disp_admin = conn.query(query_disp_admin, ttl=0)
+
+    if df_disp_admin.empty:
+        st.warning("No hay vehículos disponibles para esta fecha y franja.")
+    else:
+        with st.form("form_reserva_admin"):
+            # Al coordinador sí le mostramos la lista completa para que elija a dedo
+            st.dataframe(df_disp_admin, hide_index=True, use_container_width=True)
+            
+            col_f1, col_f2 = st.columns(2)
+            with col_f1: placa_admin = st.selectbox("Selecciona la placa:", df_disp_admin['placa'])
+            with col_f2: destino_admin = st.text_input("Destino:")
+                
+            if st.form_submit_button("Confirmar Reserva (Admin)"):
+                if not destino_admin:
+                    st.error("⚠️ Ingresa el destino.")
+                else:
+                    try:
+                        with conn.session as s:
+                            s.execute(text("""
+                                INSERT INTO reservas (fecha, placa, usuario, franja, estado, destino) 
+                                VALUES (:f, :p, :u, :fr, :e, :d)
+                            """), {"f": str(fecha_admin), "p": placa_admin, "u": usuario_destino, "fr": franja_admin, "e": 'Activa', "d": destino_admin})
+                            s.commit()
+                        
+                        st.success(f"✅ Reservado exitosamente a nombre de {usuario_destino}.")
+                        
+                        # Datos WhatsApp Admin
+                        datos_cond_adm = df_disp_admin[df_disp_admin['placa'] == placa_admin].iloc[0]
+                        n_cond_adm = datos_cond_adm['conductor']
+                        c_cond_adm = "".join(filter(str.isdigit, str(datos_cond_adm['celular'])))
+                        if len(c_cond_adm) == 10: c_cond_adm = "57" + c_cond_adm
+                        
+                        msj_wa_adm = f"Hola {n_cond_adm}, soy {usuario_actual} (Coordinador). Te he asignado un servicio con {usuario_destino} para el {fecha_admin}, Franja: {franja_admin}. Destino: {destino_admin}."
+                        wa_url_adm = f"https://wa.me/{c_cond_adm}?text={urllib.parse.quote(msj_wa_adm)}"
+                        
+                        st.markdown(f"""
+                            <a href="{wa_url_adm}" target="_blank" style="text-decoration: none;">
+                                <div style="background-color: #25D366; color: white; padding: 15px; text-align: center; border-radius: 10px; font-weight: bold; font-size: 20px; margin-top: 10px;">
+                                    📱 NOTIFICAR ASIGNACIÓN A {n_cond_adm.upper()}
+                                </div>
+                            </a>
+                            <br>
+                        """, unsafe_allow_html=True)
+                    except Exception as e:
+                        st.error(f"Error al reservar: {e}")
     with st.expander("🛠️ Panel de Control: Usuarios y Vehículos"):
         tab_veh, tab_usu = st.tabs(["Listado de Vehículos", "Listado de Usuarios"])
 
