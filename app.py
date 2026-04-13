@@ -240,7 +240,7 @@ elif rol_actual == 'Trabajador':
         with col1: fecha_res = st.date_input("¿Qué día?", min_value=date.today())
         with col2: franja_res = st.selectbox("Franja Horaria:", ["Mañana", "Tarde", "Todo el día"])
             
-        st.markdown("### Vehículos Disponibles")
+        st.markdown("### Disponibilidad de Vehículos")
         query_disponibles = f"""
             SELECT v.placa, v.conductor, v.celular FROM asignaciones a
             JOIN vehiculos v ON a.placa = v.placa
@@ -252,17 +252,24 @@ elif rol_actual == 'Trabajador':
         df_disp = conn.query(query_disponibles, ttl=0)
         
         if df_disp.empty:
-            st.warning("No hay vehículos disponibles.")
+            st.warning("No hay vehículos disponibles para esta fecha y franja.")
         else:
-            st.dataframe(df_disp, hide_index=True, use_container_width=True)
+            # Mostramos solo la cantidad, ocultando quiénes son
+            st.success(f"✅ Hay {len(df_disp)} vehículo(s) disponible(s) para tu solicitud.")
+            st.info("💡 Para garantizar la equidad, el sistema te asignará un vehículo automáticamente.")
+
             with st.form("form_reserva"):
-                placa_elegida = st.selectbox("Selecciona la placa:", df_disp['placa'])
                 destino_res = st.text_input("Destino:")
-                if st.form_submit_button("Confirmar Reserva"):
+                if st.form_submit_button("Asignar y Confirmar Reserva"):
                     if not destino_res:
                         st.error("⚠️ Ingresa el destino.")
                     else:
                         try:
+                            # 1. El sistema elige un vehículo al azar usando .sample()
+                            vehiculo_asignado = df_disp.sample(n=1).iloc[0]
+                            placa_elegida = vehiculo_asignado['placa']
+
+                            # 2. Guardamos la reserva en la base de datos
                             with conn.session as s:
                                 s.execute(text("""
                                     INSERT INTO reservas (fecha, placa, usuario, franja, estado, destino) 
@@ -270,31 +277,28 @@ elif rol_actual == 'Trabajador':
                                 """), {"f": str(fecha_res), "p": placa_elegida, "u": usuario_actual, "fr": franja_res, "e": 'Activa', "d": destino_res})
                                 s.commit()
                             
-                            st.success(f"✅ Reservado: {placa_elegida}")
+                            # 3. AHORA SÍ revelamos quién es el conductor asignado
+                            n_cond = vehiculo_asignado['conductor']
+                            st.success(f"🎉 ¡Reserva exitosa! Se te ha asignado el vehículo **{placa_elegida}** con el conductor **{n_cond}**.")
                             
-                            # Datos WhatsApp
-                            datos_cond = conn.query(f"SELECT conductor, celular FROM vehiculos WHERE placa='{placa_elegida}'", ttl=0)
-                            if not datos_cond.empty:
-                                n_cond = datos_cond.iloc[0]['conductor']
-                                c_cond = "".join(filter(str.isdigit, str(datos_cond.iloc[0]['celular'])))
-                                if len(c_cond) == 10: c_cond = "57" + c_cond
-                                
-                                msj_wa = f"Hola {n_cond}, soy {usuario_actual}. Reservé el vehículo {placa_elegida} para el {fecha_res}, Franja Horaria: {franja_res}. Destino: {destino_res}."
-                                wa_url = f"https://wa.me/{c_cond}?text={urllib.parse.quote(msj_wa)}"
-                                
-                                # BOTÓN GRANDE Y VERDE
-                                st.markdown(f"""
-                                    <a href="{wa_url}" target="_blank" style="text-decoration: none;">
-                                        <div style="background-color: #25D366; color: white; padding: 15px; text-align: center; border-radius: 10px; font-weight: bold; font-size: 20px; margin-top: 10px;">
-                                            📱 NOTIFICAR A {n_cond.upper()} POR WHATSAPP
-                                        </div>
-                                    </a>
-                                    <br>
-                                """, unsafe_allow_html=True)
-                                
-                                st.info("Haga clic arriba para enviar el mensaje. Luego puede refrescar la página manualmente.")
-                                # Quitamos el st.rerun() para que el botón no desaparezca
-                                
+                            # 4. Datos WhatsApp (Misma lógica que ya tenías)
+                            c_cond = "".join(filter(str.isdigit, str(vehiculo_asignado['celular'])))
+                            if len(c_cond) == 10: c_cond = "57" + c_cond
+                            
+                            msj_wa = f"Hola {n_cond}, soy {usuario_actual}. Reservé el vehículo {placa_elegida} para el {fecha_res}, Franja Horaria: {franja_res}. Destino: {destino_res}."
+                            wa_url = f"https://wa.me/{c_cond}?text={urllib.parse.quote(msj_wa)}"
+                            
+                            st.markdown(f"""
+                                <a href="{wa_url}" target="_blank" style="text-decoration: none;">
+                                    <div style="background-color: #25D366; color: white; padding: 15px; text-align: center; border-radius: 10px; font-weight: bold; font-size: 20px; margin-top: 10px;">
+                                        📱 NOTIFICAR A {n_cond.upper()} POR WHATSAPP
+                                    </div>
+                                </a>
+                                <br>
+                            """, unsafe_allow_html=True)
+                            
+                            st.info("Haga clic arriba para enviar el mensaje. Luego puede refrescar la página manualmente.")
+                            
                         except Exception as e:
                             st.error(f"Error al reservar: {e}")
 
