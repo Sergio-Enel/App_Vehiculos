@@ -138,12 +138,48 @@ if rol_actual == 'Coordinador':
             except Exception as e:
                 st.error("Error al guardar asignación. Intente de nuevo.")
 
-    st.subheader("📊 Estado de Reservas")
-    df_reservas_dia = conn.query(f"SELECT placa, usuario, franja, estado FROM reservas WHERE fecha='{fecha_sel}'", ttl=0)
-    if not df_reservas_dia.empty:
-        st.dataframe(df_reservas_dia, use_container_width=True)
-    else:
+    st.subheader("📊 Estado y Gestión de Reservas")
+    # Agregamos el 'id' a la consulta para poder liberar
+    df_reservas_dia = conn.query(f"SELECT id, placa, usuario, franja, estado FROM reservas WHERE fecha='{fecha_sel}'", ttl=0)
+    
+    if df_reservas_dia.empty:
         st.info("No hay reservas para esta fecha.")
+    else:
+        for _, row in df_reservas_dia.iterrows():
+            if row['estado'] == 'Activa':
+                col_info, col_btn = st.columns([0.8, 0.2])
+                col_info.write(f"🚗 **{row['placa']}** | 👤 {row['usuario']} | 🕒 {row['franja']}")
+                
+                if col_btn.button(f"🗑️ Forzar Liberación", key=f"admin_lib_{row['id']}"):
+                    try:
+                        d_cond = conn.query(f"SELECT conductor, celular FROM vehiculos WHERE placa='{row['placa']}'", ttl=0)
+                        
+                        with conn.session as s:
+                            s.execute(text("UPDATE reservas SET estado = 'Liberada' WHERE id = :id"), {"id": row['id']})
+                            s.commit()
+                        
+                        st.warning(f"Reserva de {row['usuario']} liberada por el Coordinador.")
+
+                        # Botón WhatsApp Admin
+                        if not d_cond.empty:
+                            n_c = d_cond.iloc[0]['conductor']
+                            c_c = "".join(filter(str.isdigit, str(d_cond.iloc[0]['celular'])))
+                            if len(c_c) == 10: c_c = "57" + c_c
+                            
+                            msj_lib = f"Hola {n_c}, te informo que el Coordinador {usuario_actual} ha liberado el vehículo {row['placa']} (antes reservado por {row['usuario']})."
+                            url_lib = f"https://wa.me/{c_c}?text={urllib.parse.quote(msj_lib)}"
+                            
+                            st.markdown(f"""
+                                <a href="{url_lib}" target="_blank" style="text-decoration: none;">
+                                    <div style="background-color: #FF4B4B; color: white; padding: 12px; text-align: center; border-radius: 8px; font-weight: bold; font-size: 18px;">
+                                        📲 Avisar liberación a {n_c}
+                                    </div>
+                                </a>
+                            """, unsafe_allow_html=True)
+                    except Exception as e:
+                        st.error(f"Error al liberar: {e}")
+            else:
+                st.markdown(f"<span style='color:gray'>🚗 <i>{row['placa']}</i> | 👤 <i>{row['usuario']}</i> | ✅ <b>Liberada</b></span>", unsafe_allow_html=True)
 
     with st.expander("🛠️ Panel de Control: Usuarios y Vehículos"):
         tab_veh, tab_usu = st.tabs(["Listado de Vehículos", "Listado de Usuarios"])
