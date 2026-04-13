@@ -140,9 +140,9 @@ if rol_actual == 'Coordinador':
 
     st.subheader("📊 Control Maestro de Reservas")
     
-    # 1. Consulta de datos
+    # 1. Consulta de datos (incluimos r.fecha)
     df_res_coord = conn.query(f"""
-        SELECT r.id, r.placa, v.conductor, r.usuario, r.franja, r.destino, r.estado 
+        SELECT r.id, r.fecha, r.placa, v.conductor, r.usuario, r.franja, r.destino, r.estado 
         FROM reservas r
         JOIN vehiculos v ON r.placa = v.placa
         WHERE r.fecha='{fecha_sel}'
@@ -151,15 +151,19 @@ if rol_actual == 'Coordinador':
     if df_res_coord.empty:
         st.info(f"No hay movimientos registrados para el {fecha_sel}")
     else:
-        # 2. Resumen rápido en tabla (Solo lectura)
+        # 2. Vista Rápida con Fecha
         st.write("### Vista Rápida")
+        # Formateamos la fecha para que se vea más limpia en la tabla
+        df_mostrar = df_res_coord.copy()
+        df_mostrar['fecha'] = df_mostrar['fecha'].astype(str)
+        
         st.dataframe(
-            df_res_coord[['placa', 'conductor', 'usuario', 'franja', 'estado']], 
+            df_mostrar[['fecha', 'placa', 'conductor', 'usuario', 'franja', 'estado']], 
             use_container_width=True, 
             hide_index=True
         )
 
-        # 3. Acciones de Gestión (Ordenadas por tarjetas/expanders)
+        # 3. Acciones de Gestión
         st.write("### Acciones de Liberación")
         reservas_activas = df_res_coord[df_res_coord['estado'] == 'Activa']
         
@@ -167,30 +171,30 @@ if rol_actual == 'Coordinador':
             st.success("No hay reservas activas por liberar.")
         else:
             for _, row in reservas_activas.iterrows():
-                # Creamos un acordeón por cada vehículo activo
-                with st.expander(f"🚗 {row['placa']} - Asignado a: {row['usuario']} ({row['franja']})"):
+                # Añadimos la fecha en el título del expander para mayor claridad
+                with st.expander(f"📅 {row['fecha']} | 🚗 {row['placa']} | 👤 {row['usuario']}"):
                     col_info_ad, col_btn_ad = st.columns([0.7, 0.3])
                     
                     with col_info_ad:
+                        st.write(f"**Turno:** {row['franja']}")
                         st.write(f"**Conductor:** {row['conductor']}")
                         st.write(f"**Destino:** {row['destino']}")
                     
                     with col_btn_ad:
                         if st.button(f"🚫 Forzar Liberación", key=f"f_lib_{row['id']}", use_container_width=True):
                             try:
-                                # Ejecutar liberación
                                 with conn.session as s:
                                     s.execute(text("UPDATE reservas SET estado = 'Liberada' WHERE id = :id"), {"id": row['id']})
                                     s.commit()
                                 
-                                st.toast(f"Vehículo {row['placa']} liberado correctamente", icon="✅")
+                                st.toast(f"Vehículo {row['placa']} liberado", icon="✅")
                                 
-                                # Preparar WhatsApp de aviso
+                                # WhatsApp de aviso
                                 d_v = conn.query(f"SELECT celular FROM vehiculos WHERE placa='{row['placa']}'", ttl=0)
                                 if not d_v.empty:
                                     cel_c = "".join(filter(str.isdigit, str(d_v.iloc[0]['celular'])))
                                     if len(cel_c) == 10: cel_c = "57" + cel_c
-                                    msj = f"Hola {row['conductor']}, el Coordinador {usuario_actual} ha liberado tu vehículo {row['placa']} que estaba con {row['usuario']}."
+                                    msj = f"Hola {row['conductor']}, el Coordinador {usuario_actual} ha liberado tu vehículo {row['placa']} del día {row['fecha']}."
                                     url = f"https://wa.me/{cel_c}?text={urllib.parse.quote(msj)}"
                                     
                                     st.markdown(f"""
