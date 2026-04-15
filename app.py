@@ -58,7 +58,7 @@ else:
                 border: 2px solid #FF69B4;
                 text-align: center;
                 margin-bottom: 20px;">
-                <h1 style="color: #D23669; margin: 0;">🌸 ¡Bienvenida HOLA LINA, {usuario_actual}! 🌸</h1>
+                <h1 style="color: #D23669; margin: 0;">🌸 ¡Bienvenida, {usuario_actual}! 🌸</h1>
                 <p style="color: #D23669; font-weight: bold;">Sesión activa en modo especial</p>
             </div>
         """, unsafe_allow_html=True)
