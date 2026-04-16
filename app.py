@@ -62,20 +62,7 @@ else:
                 <p style="color: #D23669; font-weight: bold;">Sesión activa en modo especial</p>
             </div>
         """, unsafe_allow_html=True)
-    elif usuario_actual == "Kevin Escobar": 
-        st.markdown(f"""
-            <div style="
-                background: linear-gradient(to right, #FF0018, #FFA52C, #FFFF41, #008018, #0000F9, #86007D); 
-                padding: 20px; 
-                border-radius: 15px; 
-                text-align: center; 
-                margin-bottom: 20px;">
-                <div style="background-color: rgba(255, 255, 255, 0.8); padding: 10px; border-radius: 10px; display: inline-block;">
-                    <h1 style="color: #333; margin: 0;">🏳️‍🌈 ¡Bienvenida, {usuario_actual}! 🏳️‍🌈</h1>
-                    <p style="color: #555; font-weight: bold; margin: 0;">Sesión activa o pasiva con orgullo</p>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
+    
     else:
         st.sidebar.success(f"Sesión iniciada: **{usuario_actual}**")
     # ---------------------------------
