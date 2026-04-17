@@ -67,7 +67,29 @@ else:
         st.sidebar.success(f"Sesión iniciada: **{usuario_actual}**")
     # ---------------------------------
         st.sidebar.info(f"Rol activo: **{rol_actual}**")
-
+# ==========================================
+# CRÉDITOS DEL DESARROLLADOR
+# ==========================================
+st.sidebar.markdown("---") # Una línea divisoria para separar del menú
+st.sidebar.markdown(
+    f"""
+    <div style="
+        background-color: rgba(255, 255, 255, 0.05);
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        text-align: center;
+    ">
+        <p style="margin: 0; font-size: 0.8em; color: gray;">Desarrollado por:</p>
+        <strong style="font-size: 1.1em; color: #FF4B4B;">Sergio Cutiva</strong>
+        <p style="margin: 5px 0 0 0; font-size: 0.75em;">
+            📧 <a href="mailto:sergio.cutiva@enel.com" style="text-decoration: none; color: inherit;">sergio.cutiva@enel.com</a><br>
+            📧 <a href="mailto:sergiocutivam@gmail.com" style="text-decoration: none; color: inherit;">sergiocutivam@gmail.com</a>
+        </p>
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
 # ==========================================
 # VISTA GLOBAL: VEHÍCULOS EN RUTA SEGÚN FECHA
 # ==========================================
