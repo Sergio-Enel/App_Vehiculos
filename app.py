@@ -417,45 +417,64 @@ elif rol_actual == 'Trabajador':
                             st.error(f"Error al reservar: {e}")
 
     with tab_mis_reservas:
-        query_mis = f"SELECT id, fecha, placa, franja FROM reservas WHERE usuario='{usuario_actual}' AND estado='Activa'"
+        # 1. Consultamos las reservas activas incluyendo destino para el mensaje
+        query_mis = f"""
+            SELECT r.id, r.fecha, r.placa, r.franja, r.destino, v.conductor, v.celular 
+            FROM reservas r
+            JOIN vehiculos v ON r.placa = v.placa
+            WHERE r.usuario='{usuario_actual}' AND r.estado='Activa'
+        """
         df_mis = conn.query(query_mis, ttl=0)
         
         if df_mis.empty:
             st.info("No tienes reservas activas.")
         else:
+            st.write("### Mis Vehículos Reservados")
             for _, row in df_mis.iterrows():
-                col_info, col_btn = st.columns([0.7, 0.3])
-                col_info.write(f"🚗 **{row['placa']}** | {row['fecha']} | {row['franja']}")
-                
-                if col_btn.button(f"🗑️ Liberar {row['placa']}", key=f"lib_{row['id']}"):
-                    try:
-                        # 1. Obtener datos antes de liberar para el mensaje
-                        d_cond = conn.query(f"SELECT conductor, celular FROM vehiculos WHERE placa='{row['placa']}'", ttl=0)
+                # Usamos un expander para cada reserva para que se vea ordenado
+                with st.expander(f"🚗 {row['placa']} - {row['fecha']} ({row['franja']})"):
+                    col_det, col_acc = st.columns([0.6, 0.4])
+                    
+                    with col_det:
+                        st.write(f"**Conductor:** {row['conductor']}")
+                        st.write(f"**Destino:** {row['destino']}")
+                    
+                    with col_acc:
+                        # --- BOTÓN DE WHATSAPP (SIEMPRE VISIBLE MIENTRAS ESTÉ ACTIVA) ---
+                        c_cond = "".join(filter(str.isdigit, str(row['celular'])))
+                        if len(c_cond) == 10: c_cond = "57" + c_cond
                         
-                        # 2. Liberar en DB
-                        with conn.session as s:
-                            s.execute(text("UPDATE reservas SET estado = 'Liberada' WHERE id = :id"), {"id": row['id']})
-                            s.commit()
+                        msj_wa = f"Hola {row['conductor']}, soy {usuario_actual}. Te confirmo mi reserva del vehículo {row['placa']} para el {row['fecha']} ({row['franja']}). Destino: {row['destino']}."
+                        wa_url = f"https://wa.me/{c_cond}?text={urllib.parse.quote(msj_wa)}"
                         
-                        st.warning(f"Vehículo {row['placa']} liberado.")
+                        st.markdown(f"""
+                            <a href="{wa_url}" target="_blank" style="text-decoration: none;">
+                                <div style="background-color: #25D366; color: white; padding: 8px; text-align: center; border-radius: 5px; font-weight: bold; margin-bottom: 10px;">
+                                    📱 Avisar por WhatsApp
+                                </div>
+                            </a>
+                        """, unsafe_allow_html=True)
 
-                        # 3. Mostrar botón de WhatsApp para avisar la liberación
-                        if not d_cond.empty:
-                            n_c = d_cond.iloc[0]['conductor']
-                            c_c = "".join(filter(str.isdigit, str(d_cond.iloc[0]['celular'])))
-                            if len(c_c) == 10: c_c = "57" + c_c
-                            
-                       
-                            msj_lib = f"Hola {n_c}, te informo que el trabajador {usuario_actual} ha liberado el vehículo {row['placa']}. Está disponible nuevamente."
-                            url_lib = f"https://wa.me/{c_c}?text={urllib.parse.quote(msj_lib)}"
-                            
-                            st.markdown(f"""
-                                <a href="{url_lib}" target="_blank" style="text-decoration: none;">
-                                    <div style="background-color: #FF4B4B; color: white; padding: 12px; text-align: center; border-radius: 8px; font-weight: bold; font-size: 18px;">
-                                        📲 Avisar liberación a {n_c}
-                                    </div>
-                                </a>
-                            """, unsafe_allow_html=True)
-                            st.info("La lista se actualizará la próxima vez que ingreses o cambies de pestaña.")
-                    except Exception:
-                        st.error("No se pudo liberar.")
+                        # --- BOTÓN DE LIBERAR ---
+                        if st.button(f"🗑️ Liberar Vehículo", key=f"lib_v2_{row['id']}", use_container_width=True):
+                            try:
+                                with conn.session as s:
+                                    s.execute(text("UPDATE reservas SET estado = 'Liberada' WHERE id = :id"), {"id": row['id']})
+                                    s.commit()
+                                
+                                st.warning(f"Vehículo {row['placa']} liberado.")
+                                
+                                # Aviso de liberación (WhatsApp)
+                                msj_lib = f"Hola {row['conductor']}, el trabajador {usuario_actual} ha liberado el vehículo {row['placa']}. Ya no está reservado."
+                                url_lib = f"https://wa.me/{c_cond}?text={urllib.parse.quote(msj_lib)}"
+                                
+                                st.markdown(f"""
+                                    <a href="{url_lib}" target="_blank" style="text-decoration: none;">
+                                        <div style="background-color: #FF4B4B; color: white; padding: 8px; text-align: center; border-radius: 5px; font-weight: bold;">
+                                            📲 Avisar Liberación
+                                        </div>
+                                    </a>
+                                """, unsafe_allow_html=True)
+                                st.rerun()
+                            except Exception as e:
+                                st.error("No se pudo liberar.")
