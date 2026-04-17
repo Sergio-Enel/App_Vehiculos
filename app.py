@@ -43,6 +43,29 @@ usuario_actual = st.sidebar.selectbox(
 if usuario_actual == "-- Selecciona tu nombre --":
     st.title("Bienvenido al Sistema de Vehículos")
     st.warning("👈 Por favor, selecciona tu nombre en el panel de la izquierda para continuar.")
+    # --- BLOQUE DE CRÉDITOS EN LA BIENVENIDA ---
+    st.markdown("<br><br>", unsafe_allow_html=True) # Espacio para que no se vea amontonado
+    st.markdown(
+        """
+        <div style="
+            background-color: #f0f2f6;
+            padding: 20px;
+            border-radius: 15px;
+            border-left: 5px solid #FF4B4B;
+            max-width: fit-content;
+        ">
+            <p style="margin: 0; font-size: 0.9em; color: #555;">Soporte y Desarrollo:</p>
+            <h3 style="margin: 5px 0; color: #1f1f1f;">Sergio Cutiva</h3>
+            <hr style="margin: 10px 0; border: 0.5px solid #ddd;">
+            <p style="margin: 0; font-size: 0.85em; color: #333;">
+                <b>Contacto Enel:</b> <a href="mailto:sergio.cutiva@enel.com">sergio.cutiva@enel.com</a><br>
+                <b>Personal:</b> <a href="mailto:sergiocutivam@gmail.com">sergiocutivam@gmail.com</a>
+            </p>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+    # -------------------------------------------
     st.stop() 
 else:
     rol_actual = usuarios_df[usuarios_df['nombre'] == usuario_actual]['rol'].values[0]
