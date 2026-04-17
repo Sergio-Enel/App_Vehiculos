@@ -417,6 +417,22 @@ elif rol_actual == 'Trabajador':
                             st.error(f"Error al reservar: {e}")
 
     with tab_mis_reservas:
+
+    # --- BLOQUE NUEVO: Notificación persistente ---
+        if "lib_pendiente" in st.session_state:
+            lp = st.session_state.lib_pendiente
+            st.error(f"⚠️ Has liberado el vehículo {lp['placa']}. ¡Avisa al conductor!")
+            st.markdown(f"""
+                <a href="{lp['url']}" target="_blank" style="text-decoration: none;">
+                    <div style="background-color: #FF4B4B; color: white; padding: 15px; text-align: center; border-radius: 10px; font-weight: bold; font-size: 18px;">
+                        📲 CLIC AQUÍ PARA AVISAR A {lp['conductor'].upper()}
+                    </div>
+                </a>
+            """, unsafe_allow_html=True)
+            if st.button("✅ Ya avisé / Cerrar aviso"):
+                del st.session_state.lib_pendiente
+                st.rerun()
+            st.markdown("---")
         # 1. Consultamos las reservas activas incluyendo destino para el mensaje
         query_mis = f"""
             SELECT r.id, r.fecha, r.placa, r.franja, r.destino, v.conductor, v.celular 
@@ -468,13 +484,12 @@ elif rol_actual == 'Trabajador':
                                 msj_lib = f"Hola {row['conductor']}, el trabajador {usuario_actual} ha liberado el vehículo {row['placa']}. Ya no está reservado."
                                 url_lib = f"https://wa.me/{c_cond}?text={urllib.parse.quote(msj_lib)}"
                                 
-                                st.markdown(f"""
-                                    <a href="{url_lib}" target="_blank" style="text-decoration: none;">
-                                        <div style="background-color: #FF4B4B; color: white; padding: 8px; text-align: center; border-radius: 5px; font-weight: bold;">
-                                            📲 Avisar Liberación
-                                        </div>
-                                    </a>
-                                """, unsafe_allow_html=True)
+                                # Guardamos los datos para que el banner aparezca al recargar
+                                st.session_state.lib_pendiente = {
+                                    "placa": row['placa'],
+                                    "conductor": row['conductor'],
+                                    "url": url_lib
+                                }
                                 st.rerun()
                             except Exception as e:
                                 st.error("No se pudo liberar.")
