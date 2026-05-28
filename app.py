@@ -3,6 +3,7 @@ import pandas as pd
 from sqlalchemy import text
 from datetime import date
 import urllib.parse
+import plotly.express as px
 
 # ==========================================
 # CONFIGURACIÓN DE PÁGINA Y BASE DE DATOS
@@ -386,7 +387,91 @@ if rol_actual == 'Coordinador':
                             st.rerun()
                         except Exception:
                             st.error("No se pudo eliminar al usuario.")
+# ==========================================
+    # NUEVO MÓDULO: ANÁLISIS Y ESTADÍSTICAS (SOLO COORDINADOR)
+    # ==========================================
+    st.markdown("---")
+    st.title("📈 Análisis y Demanda de Vehículos")
+    
+    # Consultamos todo el histórico de reservas
+    df_historico = conn.query("SELECT * FROM reservas", ttl=0)
+    
+    if not df_historico.empty:
+        # Convertimos la columna de fecha para poder filtrarla matemáticamente
+        df_historico['fecha'] = pd.to_datetime(df_historico['fecha'])
+        hoy = pd.to_datetime(date.today())
+        
+        # Filtros de tiempo horizontales
+        filtro_tiempo = st.radio(
+            "Selecciona el periodo de análisis:",
+            ["Histórico Completo", "Hoy", "Últimos 7 días", "Este Mes", "Este Año"],
+            horizontal=True
+        )
+        
+        # Aplicamos el filtro de fecha según la selección
+        if filtro_tiempo == "Hoy":
+            df_filtrado = df_historico[df_historico['fecha'] == hoy]
+        elif filtro_tiempo == "Últimos 7 días":
+            df_filtrado = df_historico[df_historico['fecha'] >= (hoy - pd.Timedelta(days=7))]
+        elif filtro_tiempo == "Este Mes":
+            df_filtrado = df_historico[(df_historico['fecha'].dt.month == hoy.month) & (df_historico['fecha'].dt.year == hoy.year)]
+        elif filtro_tiempo == "Este Año":
+            df_filtrado = df_historico[df_historico['fecha'].dt.year == hoy.year]
+        else:
+            df_filtrado = df_historico.copy()
+            
+        if df_filtrado.empty:
+            st.info(f"No hay datos registrados para el filtro: {filtro_tiempo}")
+        else:
+            # 1. Tarjetas de Resumen (KPIs)
+            col_k1, col_k2, col_k3 = st.columns(3)
+            col_k1.metric("📌 Total Reservas", len(df_filtrado))
+            col_k2.metric("🚗 Vehículos Diferentes Usados", df_filtrado['placa'].nunique())
+            col_k3.metric("👤 Trabajadores Activos", df_filtrado['usuario'].nunique())
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # 2. Gráficos Profesionales
+            col_g1, col_g2 = st.columns(2)
+            
+            with col_g1:
+                st.subheader("🏆 Vehículos Más Demandados")
+                demanda_veh = df_filtrado['placa'].value_counts().reset_index()
+                demanda_veh.columns = ['Placa', 'Cantidad']
+                # Gráfico de barras de Plotly
+                fig_veh = px.bar(demanda_veh, x='Placa', y='Cantidad', color='Placa', text='Cantidad',
+                                 color_discrete_sequence=px.colors.qualitative.Pastel)
+                st.plotly_chart(fig_veh, use_container_width=True)
+                
+            with col_g2:
+                st.subheader("🕒 Demanda por Turno (Franja)")
+                demanda_franja = df_filtrado['franja'].value_counts().reset_index()
+                demanda_franja.columns = ['Franja', 'Cantidad']
+                # Gráfico circular (Dona) de Plotly
+                fig_franja = px.pie(demanda_franja, names='Franja', values='Cantidad', hole=0.4,
+                                    color_discrete_sequence=px.colors.qualitative.Set2)
+                st.plotly_chart(fig_franja, use_container_width=True)
 
+            # 3. Gráfico de Tendencia Temporal (Línea)
+            st.subheader("📉 Evolución de Reservas en el Tiempo")
+            tendencia = df_filtrado.groupby('fecha').size().reset_index(name='Reservas')
+            fig_tendencia = px.line(tendencia, x='fecha', y='Reservas', markers=True, 
+                                    line_shape='spline', # Hace la línea curva y elegante
+                                    color_discrete_sequence=['#FF4B4B'])
+            st.plotly_chart(fig_tendencia, use_container_width=True)
+            
+            # 4. Tabla de Top Usuarios
+            with st.expander("Ver Top Trabajadores (Ranking de Reservas)"):
+                demanda_usu = df_filtrado['usuario'].value_counts().reset_index()
+                demanda_usu.columns = ['Trabajador', 'Total Reservas']
+                st.dataframe(demanda_usu, hide_index=True, use_container_width=True)
+    else:
+        st.info("Aún no hay histórico de reservas para analizar.")
+
+# ==========================================
+# VISTA: USUARIO (TRABAJADOR)
+# ==========================================
+# (Aquí sigue el código: elif rol_actual == 'Trabajador': ...)
 # ==========================================
 # VISTA: USUARIO (TRABAJADOR)
 # ==========================================
