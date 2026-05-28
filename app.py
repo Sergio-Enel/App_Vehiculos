@@ -397,7 +397,7 @@ if rol_actual == 'Coordinador':
     df_historico = conn.query("SELECT * FROM reservas", ttl=0)
     
     if not df_historico.empty:
-        # Convertimos la columna de fecha para poder filtrarla matemáticamente
+        # Convertimos la columna de fecha para poder filtrarla
         df_historico['fecha'] = pd.to_datetime(df_historico['fecha'])
         hoy = pd.to_datetime(date.today())
         
@@ -410,35 +410,54 @@ if rol_actual == 'Coordinador':
         
         # Aplicamos el filtro de fecha según la selección
         if filtro_tiempo == "Hoy":
-            df_filtrado = df_historico[df_historico['fecha'] == hoy]
+            df_filtrado = df_historico[df_historico['fecha'] == hoy].copy()
         elif filtro_tiempo == "Últimos 7 días":
-            df_filtrado = df_historico[df_historico['fecha'] >= (hoy - pd.Timedelta(days=7))]
+            df_filtrado = df_historico[df_historico['fecha'] >= (hoy - pd.Timedelta(days=7))].copy()
         elif filtro_tiempo == "Este Mes":
-            df_filtrado = df_historico[(df_historico['fecha'].dt.month == hoy.month) & (df_historico['fecha'].dt.year == hoy.year)]
+            df_filtrado = df_historico[(df_historico['fecha'].dt.month == hoy.month) & (df_historico['fecha'].dt.year == hoy.year)].copy()
         elif filtro_tiempo == "Este Año":
-            df_filtrado = df_historico[df_historico['fecha'].dt.year == hoy.year]
+            df_filtrado = df_historico[df_historico['fecha'].dt.year == hoy.year].copy()
         else:
             df_filtrado = df_historico.copy()
             
         if df_filtrado.empty:
             st.info(f"No hay datos registrados para el filtro: {filtro_tiempo}")
         else:
-            # 1. Tarjetas de Resumen (KPIs)
-            col_k1, col_k2, col_k3 = st.columns(3)
-            col_k1.metric("📌 Total Reservas", len(df_filtrado))
-            col_k2.metric("🚗 Vehículos Diferentes Usados", df_filtrado['placa'].nunique())
-            col_k3.metric("👤 Trabajadores Activos", df_filtrado['usuario'].nunique())
+            # ======================================================
+            # NUEVA LÓGICA MATEMÁTICA: CÁLCULO DE TURNOS Y CAPACIDAD
+            # ======================================================
+            # 1. Calculamos cuánto "pesa" cada reserva (Todo el día = 2 turnos)
+            df_filtrado['turnos_usados'] = df_filtrado['franja'].apply(lambda x: 2 if x == 'Todo el día' else 1)
+            total_turnos_usados = df_filtrado['turnos_usados'].sum()
+
+            # 2. Calculamos la capacidad máxima teórica (Turnos Disponibles)
+            # Días únicos con actividad * Total de vehículos de tu flota * 2 turnos al día
+            dias_unicos = df_filtrado['fecha'].nunique()
+            cantidad_vehiculos = len(vehiculos_totales) # Variable que ya traías de arriba
+            capacidad_diaria = cantidad_vehiculos * 2
+            total_turnos_disponibles = dias_unicos * capacidad_diaria
+
+            # 1. Tarjetas de Resumen (KPIs Actualizados)
+            col_k1, col_k2, col_k3, col_k4 = st.columns(4)
+            col_k1.metric("📌 Total Reservas", len(df_filtrado), help="Número bruto de reservas hechas")
+            col_k2.metric("🔄 Turnos Reservados", total_turnos_usados, help="Todo el día cuenta doble")
+            col_k3.metric("📊 Turnos Disponibles", total_turnos_disponibles, help=f"Basado en {cantidad_vehiculos} vehículos * 2 turnos * {dias_unicos} días")
+            
+            # Cálculo de saturación (Si pasa del 100%, hay sobreventa/cancelaciones re-reservadas)
+            ocupacion = (total_turnos_usados / total_turnos_disponibles * 100) if total_turnos_disponibles > 0 else 0
+            color_ocupacion = "normal" if ocupacion <= 100 else "inverse"
+            col_k4.metric("🔥 % Ocupación", f"{ocupacion:.1f}%",
+                          delta="¡Sobredemanda!" if ocupacion > 100 else "Dentro del límite",
+                          delta_color=color_ocupacion)
             
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # 2. Gráficos Profesionales
+            # 2. Gráficos Profesionales base
             col_g1, col_g2 = st.columns(2)
-            
             with col_g1:
                 st.subheader("🏆 Vehículos Más Demandados")
                 demanda_veh = df_filtrado['placa'].value_counts().reset_index()
                 demanda_veh.columns = ['Placa', 'Cantidad']
-                # Gráfico de barras de Plotly
                 fig_veh = px.bar(demanda_veh, x='Placa', y='Cantidad', color='Placa', text='Cantidad',
                                  color_discrete_sequence=px.colors.qualitative.Pastel)
                 st.plotly_chart(fig_veh, use_container_width=True)
@@ -447,31 +466,42 @@ if rol_actual == 'Coordinador':
                 st.subheader("🕒 Demanda por Turno (Franja)")
                 demanda_franja = df_filtrado['franja'].value_counts().reset_index()
                 demanda_franja.columns = ['Franja', 'Cantidad']
-                # Gráfico circular (Dona) de Plotly
                 fig_franja = px.pie(demanda_franja, names='Franja', values='Cantidad', hole=0.4,
                                     color_discrete_sequence=px.colors.qualitative.Set2)
                 st.plotly_chart(fig_franja, use_container_width=True)
 
-            # 3. Gráfico de Tendencia Temporal (Línea)
+            # 3. Gráfico de Tendencia Temporal (Con la Línea Guía en 8)
             st.subheader("📉 Evolución de Reservas en el Tiempo")
             tendencia = df_filtrado.groupby('fecha').size().reset_index(name='Reservas')
             fig_tendencia = px.line(tendencia, x='fecha', y='Reservas', markers=True, 
-                                    line_shape='spline', # Hace la línea curva y elegante
-                                    color_discrete_sequence=['#FF4B4B'])
+                                    line_shape='spline', color_discrete_sequence=['#FF4B4B'])
+            # NUEVO: Línea horizontal estática en el número 8
+            fig_tendencia.add_hline(y=8, line_dash="dash", line_color="gray", 
+                                    annotation_text="Límite Guía (8)", annotation_position="top left")
             st.plotly_chart(fig_tendencia, use_container_width=True)
             
-            # 4. Tabla de Top Usuarios
+            # 4. NUEVO GRÁFICO: Análisis de Sobredemanda (Turnos)
+            st.subheader("⚖️ Sobredemanda: Turnos Gastados vs Capacidad Máxima")
+            demanda_turnos = df_filtrado.groupby('fecha')['turnos_usados'].sum().reset_index(name='Turnos Gastados')
+            
+            fig_sobredemanda = px.bar(demanda_turnos, x='fecha', y='Turnos Gastados', text='Turnos Gastados',
+                                      color_discrete_sequence=['#1f77b4'],
+                                      title="Comparativa diaria (Si supera la línea roja, hay turnos re-asignados el mismo día)")
+            # NUEVO: Línea horizontal que detecta la capacidad diaria automática (Ej: 4 carros = 8 turnos)
+            fig_sobredemanda.add_hline(y=capacidad_diaria, line_dash="solid", line_color="red", 
+                                       annotation_text=f"Capacidad Máxima ({capacidad_diaria} turnos/día)", 
+                                       annotation_position="top left")
+            st.plotly_chart(fig_sobredemanda, use_container_width=True)
+
+            # 5. Tabla de Top Usuarios
             with st.expander("Ver Top Trabajadores (Ranking de Reservas)"):
-                demanda_usu = df_filtrado['usuario'].value_counts().reset_index()
-                demanda_usu.columns = ['Trabajador', 'Total Reservas']
+                demanda_usu = df_filtrado.groupby('usuario').agg(
+                    Reservas_Totales=('id', 'count'),
+                    Turnos_Consumidos=('turnos_usados', 'sum')
+                ).reset_index().sort_values(by='Turnos_Consumidos', ascending=False)
                 st.dataframe(demanda_usu, hide_index=True, use_container_width=True)
     else:
         st.info("Aún no hay histórico de reservas para analizar.")
-
-# ==========================================
-# VISTA: USUARIO (TRABAJADOR)
-# ==========================================
-# (Aquí sigue el código: elif rol_actual == 'Trabajador': ...)
 # ==========================================
 # VISTA: USUARIO (TRABAJADOR)
 # ==========================================
