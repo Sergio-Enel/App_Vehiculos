@@ -430,20 +430,20 @@ if rol_actual == 'Coordinador':
             df_filtrado['turnos_usados'] = df_filtrado['franja'].apply(lambda x: 2 if x == 'Todo el día' else 1)
             total_turnos_usados = df_filtrado['turnos_usados'].sum()
 
-            # 2. Calculamos la capacidad máxima teórica (Turnos Disponibles)
-            # Días únicos con actividad * Total de vehículos de tu flota * 2 turnos al día
+            # 2. Capacidad Fija: 4 Vehículos * 2 Turnos = 8 Turnos por día
+            capacidad_diaria = 8
             dias_unicos = df_filtrado['fecha'].nunique()
-            cantidad_vehiculos = len(vehiculos_totales) # Variable que ya traías de arriba
-            capacidad_diaria = cantidad_vehiculos * 2
+            if dias_unicos == 0: dias_unicos = 1 # Para evitar errores matemáticos
+            
             total_turnos_disponibles = dias_unicos * capacidad_diaria
 
             # 1. Tarjetas de Resumen (KPIs Actualizados)
             col_k1, col_k2, col_k3, col_k4 = st.columns(4)
-            col_k1.metric("📌 Total Reservas", len(df_filtrado), help="Número bruto de reservas hechas")
-            col_k2.metric("🔄 Turnos Reservados", total_turnos_usados, help="Todo el día cuenta doble")
-            col_k3.metric("📊 Turnos Disponibles", total_turnos_disponibles, help=f"Basado en {cantidad_vehiculos} vehículos * 2 turnos * {dias_unicos} días")
+            col_k1.metric("📌 Total Reservas", len(df_filtrado), help="Número de clics de reserva")
+            col_k2.metric("🔄 Turnos Consumidos", total_turnos_usados, help="Todo el día vale por 2")
+            col_k3.metric("📊 Límite Operativo", total_turnos_disponibles, help=f"Basado en 8 turnos/día * {dias_unicos} días de actividad")
             
-            # Cálculo de saturación (Si pasa del 100%, hay sobreventa/cancelaciones re-reservadas)
+            # Cálculo de saturación global del periodo seleccionado
             ocupacion = (total_turnos_usados / total_turnos_disponibles * 100) if total_turnos_disponibles > 0 else 0
             color_ocupacion = "normal" if ocupacion <= 100 else "inverse"
             col_k4.metric("🔥 % Ocupación", f"{ocupacion:.1f}%",
@@ -475,21 +475,24 @@ if rol_actual == 'Coordinador':
             tendencia = df_filtrado.groupby('fecha').size().reset_index(name='Reservas')
             fig_tendencia = px.line(tendencia, x='fecha', y='Reservas', markers=True, 
                                     line_shape='spline', color_discrete_sequence=['#FF4B4B'])
-            # NUEVO: Línea horizontal estática en el número 8
             fig_tendencia.add_hline(y=8, line_dash="dash", line_color="gray", 
                                     annotation_text="Límite Guía (8)", annotation_position="top left")
             st.plotly_chart(fig_tendencia, use_container_width=True)
             
             # 4. NUEVO GRÁFICO: Análisis de Sobredemanda (Turnos)
-            st.subheader("⚖️ Sobredemanda: Turnos Gastados vs Capacidad Máxima")
+            st.subheader("⚖️ Sobredemanda: Turnos Gastados vs Capacidad Máxima (8/día)")
             demanda_turnos = df_filtrado.groupby('fecha')['turnos_usados'].sum().reset_index(name='Turnos Gastados')
             
+            # Evaluamos si hubo sobredemanda para pintar la barra de ROJO
+            demanda_turnos['Estado'] = demanda_turnos['Turnos Gastados'].apply(lambda x: 'Sobredemanda' if x > 8 else 'Normal')
+            
             fig_sobredemanda = px.bar(demanda_turnos, x='fecha', y='Turnos Gastados', text='Turnos Gastados',
-                                      color_discrete_sequence=['#1f77b4'],
-                                      title="Comparativa diaria (Si supera la línea roja, hay turnos re-asignados el mismo día)")
-            # NUEVO: Línea horizontal que detecta la capacidad diaria automática (Ej: 4 carros = 8 turnos)
-            fig_sobredemanda.add_hline(y=capacidad_diaria, line_dash="solid", line_color="red", 
-                                       annotation_text=f"Capacidad Máxima ({capacidad_diaria} turnos/día)", 
+                                      color='Estado',
+                                      color_discrete_map={'Normal': '#1f77b4', 'Sobredemanda': '#FF4B4B'})
+            
+            # Línea horizontal fija en 8
+            fig_sobredemanda.add_hline(y=8, line_dash="solid", line_color="red", 
+                                       annotation_text="Límite Máximo (8 turnos)", 
                                        annotation_position="top left")
             st.plotly_chart(fig_sobredemanda, use_container_width=True)
 
