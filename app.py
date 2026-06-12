@@ -17,6 +17,14 @@ conn = st.connection(
     url="postgresql://postgres.prqgmsnglfvqyizfvaqm:Energia2026Master@aws-1-sa-east-1.pooler.supabase.com:5432/postgres"
 )
 
+# --- NUEVO: Aseguramos que exista la columna 'password' sin dañar la base actual ---
+try:
+    with conn.session as s:
+        s.execute(text("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS password TEXT"))
+        s.commit()
+except Exception:
+    pass
+
 # ==========================================
 # FUNCIONES AUXILIARES
 # ==========================================
@@ -31,8 +39,8 @@ def obtener_asignaciones(fecha):
 # ==========================================
 st.sidebar.title("🔐 Acceso al Sistema")
 
-# Obtenemos los nombres con ttl=0
-usuarios_df = conn.query("SELECT nombre, rol FROM usuarios", ttl=0)
+# Obtenemos los nombres con ttl=0 (AHORA TRAEMOS EL PASSWORD TAMBIÉN)
+usuarios_df = conn.query("SELECT id, nombre, rol, password FROM usuarios", ttl=0)
 lista_usuarios = ["-- Selecciona tu nombre --"] + usuarios_df['nombre'].tolist()
 
 usuario_actual = st.sidebar.selectbox(
@@ -45,7 +53,7 @@ if usuario_actual == "-- Selecciona tu nombre --":
     st.title("Bienvenido al Sistema de Vehículos")
     st.warning("👈 Por favor, selecciona tu nombre en el panel de la izquierda para continuar.")
     # --- BLOQUE DE CRÉDITOS EN LA BIENVENIDA ---
-    st.markdown("<br><br>", unsafe_allow_html=True) # Espacio para que no se vea amontonado
+    st.markdown("<br><br>", unsafe_allow_html=True) 
     st.markdown(
         """
         <div style="
@@ -66,13 +74,18 @@ if usuario_actual == "-- Selecciona tu nombre --":
         """, 
         unsafe_allow_html=True
     )
-    # -------------------------------------------
     st.stop() 
 else:
     rol_actual = usuarios_df[usuarios_df['nombre'] == usuario_actual]['rol'].values[0]
     
+    # --- CERRAR SESIÓN DE ADMIN SI SE CAMBIA DE USUARIO ---
+    if "coord_user" not in st.session_state:
+        st.session_state.coord_user = usuario_actual
+    if st.session_state.coord_user != usuario_actual:
+        st.session_state.coord_auth = False
+        st.session_state.coord_user = usuario_actual
+    
     # --- DETALLE PARA TU COMPAÑERA ---
-    # Reemplaza 'Nombre de tu compañera' exactamente como aparece en la DB
     if usuario_actual == "Angelica Vela": 
         st.markdown(f"""
             <div style="
@@ -89,12 +102,12 @@ else:
     
     else:
         st.sidebar.success(f"Sesión iniciada: **{usuario_actual}**")
-    # ---------------------------------
         st.sidebar.info(f"Rol activo: **{rol_actual}**")
+
 # ==========================================
 # CRÉDITOS DEL DESARROLLADOR
 # ==========================================
-st.sidebar.markdown("---") # Una línea divisoria para separar del menú
+st.sidebar.markdown("---") 
 st.sidebar.markdown(
     f"""
     <div style="
@@ -114,6 +127,7 @@ st.sidebar.markdown(
     """, 
     unsafe_allow_html=True
 )
+
 # ==========================================
 # VISTA GLOBAL: VEHÍCULOS EN RUTA SEGÚN FECHA
 # ==========================================
@@ -144,6 +158,62 @@ st.markdown("---")
 # VISTA: COORDINADOR
 # ==========================================
 if rol_actual == 'Coordinador':
+    # --- SISTEMA DE CONTRASEÑAS ---
+    if "coord_auth" not in st.session_state:
+        st.session_state.coord_auth = False
+
+    user_pass_db = usuarios_df[usuarios_df['nombre'] == usuario_actual]['password'].values[0]
+    
+    if not st.session_state.coord_auth:
+        st.markdown("### 🔒 Autenticación de Coordinador Requerida")
+        
+        # CASO 1: Es la primera vez y no tiene contraseña
+        if pd.isna(user_pass_db) or user_pass_db is None or str(user_pass_db).strip() == "":
+            st.info("👋 Parece que es tu primera vez ingresando. Por favor, crea una contraseña para proteger tu perfil.")
+            nueva_clave = st.text_input("Ingresa tu nueva contraseña:", type="password", key="new_pass")
+            if st.button("Guardar y Desbloquear", use_container_width=True):
+                if nueva_clave.strip():
+                    try:
+                        with conn.session as s:
+                            s.execute(text("UPDATE usuarios SET password = :p WHERE nombre = :n"), {"p": nueva_clave, "n": usuario_actual})
+                            s.commit()
+                        st.session_state.coord_auth = True
+                        st.success("Contraseña guardada. Ingresando...")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al guardar: {e}")
+                else:
+                    st.error("La contraseña no puede estar vacía.")
+        
+        # CASO 2: Ya tiene contraseña, se le pide para ingresar
+        else:
+            clave_ingresada = st.text_input("Ingresa tu contraseña de acceso:", type="password", key="login_pass")
+            if st.button("Desbloquear Panel", use_container_width=True):
+                if clave_ingresada == str(user_pass_db):
+                    st.session_state.coord_auth = True
+                    st.rerun()
+                else:
+                    st.error("Contraseña incorrecta ❌")
+        
+        st.stop() # Congela todo lo de abajo si no está autenticado
+
+    # SI PASÓ LA AUTENTICACIÓN: Opción para cambiar la contraseña
+    with st.expander("🔑 Cambiar mi contraseña de seguridad"):
+        cambio_clave = st.text_input("Escribe tu nueva contraseña:", type="password", key="change_pass")
+        if st.button("Actualizar contraseña"):
+            if cambio_clave.strip():
+                try:
+                    with conn.session as s:
+                        s.execute(text("UPDATE usuarios SET password = :p WHERE nombre = :n"), {"p": cambio_clave, "n": usuario_actual})
+                        s.commit()
+                    st.success("¡Contraseña actualizada exitosamente!")
+                except Exception as e:
+                    st.error("Error al actualizar la contraseña.")
+            else:
+                st.warning("Escribe una contraseña válida.")
+                
+    # --- FIN SISTEMA DE CONTRASEÑAS ---
+
     st.title("⚙️ Gestión y Asignación de Vehículos")
     fecha_sel = st.date_input("Fecha de asignación:", min_value=date.today())
     
@@ -173,7 +243,6 @@ if rol_actual == 'Coordinador':
 
     st.subheader("📊 Control Maestro de Reservas")
     
-    # 1. Consulta de datos (incluimos r.fecha)
     df_res_coord = conn.query(f"""
         SELECT r.id, r.fecha, r.placa, v.conductor, r.usuario, r.franja, r.destino, r.estado 
         FROM reservas r
@@ -184,9 +253,7 @@ if rol_actual == 'Coordinador':
     if df_res_coord.empty:
         st.info(f"No hay movimientos registrados para el {fecha_sel}")
     else:
-        # 2. Vista Rápida con Fecha
         st.write("### Vista Rápida")
-        # Formateamos la fecha para que se vea más limpia en la tabla
         df_mostrar = df_res_coord.copy()
         df_mostrar['fecha'] = df_mostrar['fecha'].astype(str)
         
@@ -196,7 +263,6 @@ if rol_actual == 'Coordinador':
             hide_index=True
         )
 
-        # 3. Acciones de Gestión
         st.write("### Acciones de Liberación")
         reservas_activas = df_res_coord[df_res_coord['estado'] == 'Activa']
         
@@ -204,7 +270,6 @@ if rol_actual == 'Coordinador':
             st.success("No hay reservas activas por liberar.")
         else:
             for _, row in reservas_activas.iterrows():
-                # Añadimos la fecha en el título del expander para mayor claridad
                 with st.expander(f"📅 {row['fecha']} | 🚗 {row['placa']} | 👤 {row['usuario']}"):
                     col_info_ad, col_btn_ad = st.columns([0.7, 0.3])
                     
@@ -222,7 +287,6 @@ if rol_actual == 'Coordinador':
                                 
                                 st.toast(f"Vehículo {row['placa']} liberado", icon="✅")
                                 
-                                # WhatsApp de aviso
                                 d_v = conn.query(f"SELECT celular FROM vehiculos WHERE placa='{row['placa']}'", ttl=0)
                                 if not d_v.empty:
                                     cel_c = "".join(filter(str.isdigit, str(d_v.iloc[0]['celular'])))
@@ -265,7 +329,6 @@ if rol_actual == 'Coordinador':
         st.warning("No hay vehículos disponibles para esta fecha y franja.")
     else:
         with st.form("form_reserva_admin"):
-            # Al coordinador sí le mostramos la lista completa para que elija a dedo
             st.dataframe(df_disp_admin, hide_index=True, use_container_width=True)
             
             col_f1, col_f2 = st.columns(2)
@@ -286,7 +349,6 @@ if rol_actual == 'Coordinador':
                         
                         st.success(f"✅ Reservado exitosamente a nombre de {usuario_destino}.")
                         
-                        # Datos WhatsApp Admin
                         datos_cond_adm = df_disp_admin[df_disp_admin['placa'] == placa_admin].iloc[0]
                         n_cond_adm = datos_cond_adm['conductor']
                         c_cond_adm = "".join(filter(str.isdigit, str(datos_cond_adm['celular'])))
@@ -328,7 +390,7 @@ if rol_actual == 'Coordinador':
                                 else:
                                     s.execute(text("INSERT INTO vehiculos (placa, conductor, celular) VALUES (:p, :c, :t)"), 
                                               {"p": p_limpia, "c": c_nuevo, "t": t_nuevo})
-                                s.commit()
+                            s.commit()
                             st.success(f"Vehículo {p_limpia} procesado.")
                             st.rerun()
                         except Exception:
@@ -387,28 +449,25 @@ if rol_actual == 'Coordinador':
                             st.rerun()
                         except Exception:
                             st.error("No se pudo eliminar al usuario.")
-# ==========================================
-    # NUEVO MÓDULO: ANÁLISIS Y ESTADÍSTICAS (SOLO COORDINADOR)
+                            
+    # ==========================================
+    # MÓDULO: ANÁLISIS Y ESTADÍSTICAS (SOLO COORDINADOR)
     # ==========================================
     st.markdown("---")
     st.title("📈 Análisis y Demanda de Vehículos")
     
-    # Consultamos todo el histórico de reservas
     df_historico = conn.query("SELECT * FROM reservas", ttl=0)
     
     if not df_historico.empty:
-        # Convertimos la columna de fecha para poder filtrarla
         df_historico['fecha'] = pd.to_datetime(df_historico['fecha'])
         hoy = pd.to_datetime(date.today())
         
-        # Filtros de tiempo horizontales
         filtro_tiempo = st.radio(
             "Selecciona el periodo de análisis:",
             ["Histórico Completo", "Hoy", "Últimos 7 días", "Este Mes", "Este Año"],
             horizontal=True
         )
         
-        # Aplicamos el filtro de fecha según la selección
         if filtro_tiempo == "Hoy":
             df_filtrado = df_historico[df_historico['fecha'] == hoy].copy()
         elif filtro_tiempo == "Últimos 7 días":
@@ -423,27 +482,20 @@ if rol_actual == 'Coordinador':
         if df_filtrado.empty:
             st.info(f"No hay datos registrados para el filtro: {filtro_tiempo}")
         else:
-            # ======================================================
-            # NUEVA LÓGICA MATEMÁTICA: CÁLCULO DE TURNOS Y CAPACIDAD
-            # ======================================================
-            # 1. Calculamos cuánto "pesa" cada reserva (Todo el día = 2 turnos)
             df_filtrado['turnos_usados'] = df_filtrado['franja'].apply(lambda x: 2 if x == 'Todo el día' else 1)
             total_turnos_usados = df_filtrado['turnos_usados'].sum()
 
-            # 2. Capacidad Fija: 4 Vehículos * 2 Turnos = 8 Turnos por día
             capacidad_diaria = 8
             dias_unicos = df_filtrado['fecha'].nunique()
-            if dias_unicos == 0: dias_unicos = 1 # Para evitar errores matemáticos
+            if dias_unicos == 0: dias_unicos = 1 
             
             total_turnos_disponibles = dias_unicos * capacidad_diaria
 
-            # 1. Tarjetas de Resumen (KPIs Actualizados)
             col_k1, col_k2, col_k3, col_k4 = st.columns(4)
             col_k1.metric("📌 Total Reservas", len(df_filtrado), help="Número de clics de reserva")
             col_k2.metric("🔄 Turnos Consumidos", total_turnos_usados, help="Todo el día vale por 2")
             col_k3.metric("📊 Límite Operativo", total_turnos_disponibles, help=f"Basado en 8 turnos/día * {dias_unicos} días de actividad")
             
-            # Cálculo de saturación global del periodo seleccionado
             ocupacion = (total_turnos_usados / total_turnos_disponibles * 100) if total_turnos_disponibles > 0 else 0
             color_ocupacion = "normal" if ocupacion <= 100 else "inverse"
             col_k4.metric("🔥 % Ocupación", f"{ocupacion:.1f}%",
@@ -452,7 +504,6 @@ if rol_actual == 'Coordinador':
             
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # 2. Gráficos Profesionales base
             col_g1, col_g2 = st.columns(2)
             with col_g1:
                 st.subheader("🏆 Vehículos Más Demandados")
@@ -470,7 +521,6 @@ if rol_actual == 'Coordinador':
                                     color_discrete_sequence=px.colors.qualitative.Set2)
                 st.plotly_chart(fig_franja, use_container_width=True)
 
-            # 3. Gráfico de Tendencia Temporal (Con la Línea Guía en 8)
             st.subheader("📉 Evolución de Reservas en el Tiempo")
             tendencia = df_filtrado.groupby('fecha').size().reset_index(name='Reservas')
             fig_tendencia = px.line(tendencia, x='fecha', y='Reservas', markers=True, 
@@ -479,24 +529,20 @@ if rol_actual == 'Coordinador':
                                     annotation_text="Límite Guía (8)", annotation_position="top left")
             st.plotly_chart(fig_tendencia, use_container_width=True)
             
-            # 4. NUEVO GRÁFICO: Análisis de Sobredemanda (Turnos)
             st.subheader("⚖️ Sobredemanda: Turnos Gastados vs Capacidad Máxima (8/día)")
             demanda_turnos = df_filtrado.groupby('fecha')['turnos_usados'].sum().reset_index(name='Turnos Gastados')
             
-            # Evaluamos si hubo sobredemanda para pintar la barra de ROJO
             demanda_turnos['Estado'] = demanda_turnos['Turnos Gastados'].apply(lambda x: 'Sobredemanda' if x > 8 else 'Normal')
             
             fig_sobredemanda = px.bar(demanda_turnos, x='fecha', y='Turnos Gastados', text='Turnos Gastados',
                                       color='Estado',
                                       color_discrete_map={'Normal': '#1f77b4', 'Sobredemanda': '#FF4B4B'})
             
-            # Línea horizontal fija en 8
             fig_sobredemanda.add_hline(y=8, line_dash="solid", line_color="red", 
                                        annotation_text="Límite Máximo (8 turnos)", 
                                        annotation_position="top left")
             st.plotly_chart(fig_sobredemanda, use_container_width=True)
 
-            # 5. Tabla de Top Usuarios
             with st.expander("Ver Top Trabajadores (Ranking de Reservas)"):
                 demanda_usu = df_filtrado.groupby('usuario').agg(
                     Reservas_Totales=('id', 'count'),
@@ -505,6 +551,7 @@ if rol_actual == 'Coordinador':
                 st.dataframe(demanda_usu, hide_index=True, use_container_width=True)
     else:
         st.info("Aún no hay histórico de reservas para analizar.")
+
 # ==========================================
 # VISTA: USUARIO (TRABAJADOR)
 # ==========================================
@@ -531,7 +578,6 @@ elif rol_actual == 'Trabajador':
         if df_disp.empty:
             st.warning("No hay vehículos disponibles para esta fecha y franja.")
         else:
-            # Mostramos solo la cantidad, ocultando quiénes son
             st.success(f"✅ Hay {len(df_disp)} vehículo(s) disponible(s) para tu solicitud.")
             st.info("💡 Para garantizar la equidad, el sistema te asignará un vehículo automáticamente.")
 
@@ -542,11 +588,9 @@ elif rol_actual == 'Trabajador':
                         st.error("⚠️ Ingresa el destino.")
                     else:
                         try:
-                            # 1. El sistema elige un vehículo al azar usando .sample()
                             vehiculo_asignado = df_disp.sample(n=1).iloc[0]
                             placa_elegida = vehiculo_asignado['placa']
 
-                            # 2. Guardamos la reserva en la base de datos
                             with conn.session as s:
                                 s.execute(text("""
                                     INSERT INTO reservas (fecha, placa, usuario, franja, estado, destino) 
@@ -554,11 +598,9 @@ elif rol_actual == 'Trabajador':
                                 """), {"f": str(fecha_res), "p": placa_elegida, "u": usuario_actual, "fr": franja_res, "e": 'Activa', "d": destino_res})
                                 s.commit()
                             
-                            # 3. AHORA SÍ revelamos quién es el conductor asignado
                             n_cond = vehiculo_asignado['conductor']
                             st.success(f"🎉 ¡Reserva exitosa! Se te ha asignado el vehículo **{placa_elegida}** con el conductor **{n_cond}**.")
                             
-                            # 4. Datos WhatsApp (Misma lógica que ya tenías)
                             c_cond = "".join(filter(str.isdigit, str(vehiculo_asignado['celular'])))
                             if len(c_cond) == 10: c_cond = "57" + c_cond
                             
@@ -580,8 +622,6 @@ elif rol_actual == 'Trabajador':
                             st.error(f"Error al reservar: {e}")
 
     with tab_mis_reservas:
-
-    # --- BLOQUE NUEVO: Notificación persistente ---
         if "lib_pendiente" in st.session_state:
             lp = st.session_state.lib_pendiente
             st.error(f"⚠️ Has liberado el vehículo {lp['placa']}. ¡Avisa al conductor!")
@@ -596,7 +636,7 @@ elif rol_actual == 'Trabajador':
                 del st.session_state.lib_pendiente
                 st.rerun()
             st.markdown("---")
-        # 1. Consultamos las reservas activas incluyendo destino para el mensaje
+            
         query_mis = f"""
             SELECT r.id, r.fecha, r.placa, r.franja, r.destino, v.conductor, v.celular 
             FROM reservas r
@@ -610,7 +650,6 @@ elif rol_actual == 'Trabajador':
         else:
             st.write("### Mis Vehículos Reservados")
             for _, row in df_mis.iterrows():
-                # Usamos un expander para cada reserva para que se vea ordenado
                 with st.expander(f"🚗 {row['placa']} - {row['fecha']} ({row['franja']})"):
                     col_det, col_acc = st.columns([0.6, 0.4])
                     
@@ -619,7 +658,6 @@ elif rol_actual == 'Trabajador':
                         st.write(f"**Destino:** {row['destino']}")
                     
                     with col_acc:
-                        # --- BOTÓN DE WHATSAPP (SIEMPRE VISIBLE MIENTRAS ESTÉ ACTIVA) ---
                         c_cond = "".join(filter(str.isdigit, str(row['celular'])))
                         if len(c_cond) == 10: c_cond = "57" + c_cond
                         
@@ -634,7 +672,6 @@ elif rol_actual == 'Trabajador':
                             </a>
                         """, unsafe_allow_html=True)
 
-                        # --- BOTÓN DE LIBERAR ---
                         if st.button(f"🗑️ Liberar Vehículo", key=f"lib_v2_{row['id']}", use_container_width=True):
                             try:
                                 with conn.session as s:
@@ -643,11 +680,9 @@ elif rol_actual == 'Trabajador':
                                 
                                 st.warning(f"Vehículo {row['placa']} liberado.")
                                 
-                                # Aviso de liberación (WhatsApp)
                                 msj_lib = f"Hola {row['conductor']}, el trabajador {usuario_actual} ha liberado el vehículo {row['placa']}. Ya no está reservado."
                                 url_lib = f"https://wa.me/{c_cond}?text={urllib.parse.quote(msj_lib)}"
                                 
-                                # Guardamos los datos para que el banner aparezca al recargar
                                 st.session_state.lib_pendiente = {
                                     "placa": row['placa'],
                                     "conductor": row['conductor'],
