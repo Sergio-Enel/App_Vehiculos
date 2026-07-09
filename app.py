@@ -208,7 +208,7 @@ if rol_actual == 'Coordinador':
                         s.commit()
                     st.success("¡Contraseña actualizada exitosamente!")
                 except Exception as e:
-                    st.error("Error al actualizar la contraseña.")
+                    st.error(f"Error al actualizar la contraseña: {e}")
             else:
                 st.warning("Escribe una contraseña válida.")
                 
@@ -239,7 +239,7 @@ if rol_actual == 'Coordinador':
                 st.success(f"Se habilitaron {len(seleccionados)} vehículos.")
                 st.rerun()
             except Exception as e:
-                st.error("Error al guardar asignación. Intente de nuevo.")
+                st.error(f"Error al guardar asignación: {e}")
 
     st.subheader("📊 Control Maestro de Reservas")
     
@@ -390,11 +390,11 @@ if rol_actual == 'Coordinador':
                                 else:
                                     s.execute(text("INSERT INTO vehiculos (placa, conductor, celular) VALUES (:p, :c, :t)"), 
                                               {"p": p_limpia, "c": c_nuevo, "t": t_nuevo})
-                            s.commit()
+                                s.commit() # <--- LA CORRECCIÓN CLAVE ESTÁ AQUÍ
                             st.success(f"Vehículo {p_limpia} procesado.")
                             st.rerun()
-                        except Exception:
-                            st.error("Error al procesar el vehículo.")
+                        except Exception as e:
+                            st.error(f"Error al procesar el vehículo: {e}")
                     else:
                         st.error("Placa y conductor obligatorios.")
 
@@ -409,8 +409,8 @@ if rol_actual == 'Coordinador':
                             s.execute(text("DELETE FROM vehiculos WHERE placa=:p"), {"p": row['placa']})
                             s.commit()
                         st.rerun()
-                    except Exception:
-                        st.error("No se puede borrar el vehículo (tiene reservas asociadas).")
+                    except Exception as e:
+                        st.error(f"No se puede borrar el vehículo (tiene reservas asociadas): {e}")
 
         with tab_usu:
             st.subheader("Gestión de Personal")
@@ -432,8 +432,8 @@ if rol_actual == 'Coordinador':
                                 s.commit()
                             st.success(f"Usuario {n_limpio} procesado.")
                             st.rerun()
-                        except Exception:
-                            st.error("Error al procesar usuario.")
+                        except Exception as e:
+                            st.error(f"Error al procesar usuario: {e}")
 
             st.write("**Eliminar Usuarios:**")
             df_u = conn.query("SELECT id, nombre, rol FROM usuarios", ttl=0)
@@ -447,8 +447,8 @@ if rol_actual == 'Coordinador':
                                 s.execute(text("DELETE FROM usuarios WHERE id=:id"), {"id": row['id']})
                                 s.commit()
                             st.rerun()
-                        except Exception:
-                            st.error("No se pudo eliminar al usuario.")
+                        except Exception as e:
+                            st.error(f"No se pudo eliminar al usuario: {e}")
                             
     # ==========================================
     # MÓDULO: ANÁLISIS Y ESTADÍSTICAS (SOLO COORDINADOR)
@@ -690,4 +690,4 @@ elif rol_actual == 'Trabajador':
                                 }
                                 st.rerun()
                             except Exception as e:
-                                st.error("No se pudo liberar.")
+                                st.error(f"No se pudo liberar: {e}")
